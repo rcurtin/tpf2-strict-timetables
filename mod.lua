@@ -1,8 +1,8 @@
 function data()
   return {
     info = {
-      name = "Strict Timetables",
-      description = "Strict Timetables allows specific and strict departure times to be set for vehicles on an entire line.",
+      name = _("mod_name"),
+      description = _("mod_description"),
       minorVersion = 0,
       severityAdd = "NONE",
       severityRemove = "WARNING",

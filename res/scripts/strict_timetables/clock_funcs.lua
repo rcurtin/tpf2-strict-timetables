@@ -53,14 +53,21 @@ end
 
 -- Initialize the GUI elements associated with the clock.
 function clockFuncs.initGUI()
+  -- First create the pieces for the clock itself.
   local line = api.gui.comp.Component.new("VerticalLine")
   local icon = api.gui.comp.ImageView.new("ui/clock_small.tga")
-  clockGUI = api.gui.comp.TextView.new("gameInfo.time.label")
+  clockGUI = api.gui.comp.TextView.new("gameInfo.strict_timetables.clock_label")
 
   local gameInfoLayout = api.gui.util.getById("gameInfo"):getLayout()
   gameInfoLayout:addItem(line)
   gameInfoLayout:addItem(icon)
   gameInfoLayout:addItem(clockGUI)
+
+  -- Now create a button for the timetable.
+  local buttonLabel = gui.textView_create("gameInfo.strict_timetables.button_label", _("timetable"))
+  local button = gui.button_create("gameInfo.strict_timetables.button", buttonLabel)
+  -- TODO: make the button do something...
+  game.gui.boxLayout_addItem("gameInfo.layout", button.id)
 
   return clockGUI
 end
