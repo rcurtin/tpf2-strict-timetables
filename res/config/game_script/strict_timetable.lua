@@ -5,11 +5,26 @@ local timetableWindowFuncs = require "strict_timetables/timetable_window_funcs"
 -- The GUI thread will receive updates passively when load() is called.
 local clock = nil
 
--- The GUI element for the clock; it is only non-nil on the GUI thread.
-local clockGUI = nil
-
--- The GUI window for setting the timetable.
-local timetableWindow = nil
+-- State held by the GUI thread.  Members will remain nil on the engine thread.
+local guiState = {
+  -- The GUI element for the clock.
+  clockHandle = nil,
+  -- The timetable window and sub-components.
+  timetableWindow = {
+    -- The handle to the main window.
+    handle = nil,
+    -- The table object used to list the lines.
+    lineTable = nil,
+    -- The rows in the line table.
+    lineTableRows = nil,
+    -- The list of filters that can be applied to the lines.
+    filters = nil
+  },
+  -- Whether or not the timetable window should always
+  -- be refreshed when shown.
+  alwaysRefresh = false,
+  ticksSinceRefresh = 0
+}
 
 function data()
   return {
@@ -39,23 +54,48 @@ function data()
 
     guiUpdate = function()
       -- Initialize the clock display if needed.
-      if not clockGUI then
-        clockGUI = clockFuncs.initGUI()
-        timetableWindow = timetableWindowFuncs.initWindow()
-        timetableWindowFuncs.initButton(timetableWindow)
+      if not guiState.clockHandle then
+        guiState.clockHandle = clockFuncs.initGUI()
+        -- Initialize the array of rows so it can be modified in-place by
+        -- subsequent function calls.
+        guiState.timetableWindow.lineTableRows = {}
+        guiState.timetableWindow = timetableWindowFuncs.initWindow(
+            guiState.timetableWindow.lineTableRows) -- lineTableRows will be set
+        timetableWindowFuncs.initButton(guiState.timetableWindow.handle)
       end
 
-      if clockGUI and clock then
-        clockGUI:setText(clockFuncs.printClock(clock))
+      if guiState.clockHandle and clock then
+        guiState.clockHandle:setText(clockFuncs.printClock(clock))
+      end
+
+      -- If we could be modifying lines or vehicles, we need to refresh the
+      -- timetable window.
+      if guiState.timetableWindow.handle:isVisible() and
+         guiState.alwaysRefresh then
+        -- Only refresh every 5 GUI ticks.
+        guiState.ticksSinceRefresh = (guiState.ticksSinceRefresh + 1) % 5
+        if guiState.ticksSinceRefresh == 0 then
+          timetableWindowFuncs.refreshLines(guiState.timetableWindow.lineTable,
+              guiState.timetableWindow.filters,
+              guiState.timetableWindow.lineTableRows)
+        end
       end
     end,
 
     handleEvent = function (src, id, name, param)
-      -- nothing to do
-      -- Events we want to handle:
-      --
-      --  * Line added/removed/changed
-      print("gui got event: ", tostring(src), tostring(id), tostring(name), tostring(param))
+      -- Nothing to do here.  (Maybe later we will send some messages.)
+    end,
+
+    guiHandleEvent = function (id, name, param)
+      if id == "menu.lineManager" and name == "toggleButton.toggle" then
+        -- When the line manager window is open, we always refresh.
+        guiState.alwaysRefresh = param
+      end
+
+      if id == "menu.vehicleManager" and name == "toggleButton.toggle" then
+        -- When the vehicle manager window is open, we always refresh.
+        guiState.alwaysRefresh = param
+      end
     end
   }
 end

@@ -6,10 +6,12 @@
 timetableWindowFuncs = {}
 
 -- Add all of the lines to the line table, using the states of the given filters
--- to select which lines are displayed.
-function timetableWindowFuncs.refreshLines(lineTable, filters)
-  -- Clear the table.
-  lineTable:deleteRows(0, lineTable:getNumRows())
+-- to select which lines are displayed.  The existing rows in the line table
+-- must be passed in because it seems there is no way to recover these from
+-- `lineTable` directly.
+--
+-- Note that this will mutate lineTableRows if any changes are detected!
+function timetableWindowFuncs.refreshLines(lineTable, filters, lineTableRows)
 
   -- Extract the values of the filters.
   -- 1: bus; 2: tram; 3: rail; 4: water; 5: air
@@ -19,6 +21,7 @@ function timetableWindowFuncs.refreshLines(lineTable, filters)
                     not filters[4]:isSelected() and
                     not filters[5]:isSelected()
 
+  local newRows = {}
   for k, l in pairs(api.engine.system.lineSystem.getLines()) do
     local lineName = api.engine.getComponent(l, api.type.ComponentType.NAME)
     local lineLabel = "ERROR" -- used if we can't find a real name for it.
@@ -55,7 +58,45 @@ function timetableWindowFuncs.refreshLines(lineTable, filters)
         buttonImage:setImage("ui/checkbox1.tga", false)
       end)
 
-      lineTable:addRow({ color, api.gui.comp.TextView.new(lineLabel), button })
+      table.insert(newRows, { color, api.gui.comp.TextView.new(lineLabel), button })
+    end
+  end
+
+  -- Sort the new table of entries in alphabetical order.
+  table.sort(newRows, function(x, y)
+      return string.lower(x[2]:getText()) < string.lower(y[2]:getText())
+  end)
+
+  -- Only update the table if any entries have changed.
+  local anyDifferent = false
+  if not lineTableRows or #newRows ~= #lineTableRows then
+    anyDifferent = true
+  else
+    for i, row in pairs(newRows) do
+      oldRow = lineTableRows[i]
+      -- Check the color label.
+      if oldRow[1]:getText() ~= row[1]:getText() then
+        anyDifferent = true
+        break
+      end
+
+      -- Check the name of the line.
+      if oldRow[2]:getText() ~= row[2]:getText() then
+        anyDifferent = true
+        break
+      end
+    end
+  end
+
+  if anyDifferent then
+    -- Clear the table.
+    lineTable:deleteRows(0, lineTable:getNumRows())
+
+    -- Add all of the new rows, and update the line table (don't create a new
+    -- one).
+    for i, row in pairs(newRows) do
+      lineTable:addRow(row)
+      lineTableRows[i] = row
     end
   end
 
@@ -64,17 +105,25 @@ end
 
 -- Initialize the window: create all the tabs and other structure that will be
 -- filled when clicked.
-function timetableWindowFuncs.initWindow()
+--
+-- Returns a table that has the same schema as 'timetableWindow' described in
+-- the main mod file.
+function timetableWindowFuncs.initWindow(lineTableRows)
   -- We have to build the components here from the inside to the outside.
   -- So, at the innermost level, let's start with the actual table that contains
   -- the lines.
   local lineHeader = api.gui.comp.Table.new(6, 'None')
   local filters = {
-      api.gui.comp.ToggleButton.new(api.gui.comp.ImageView.new("ui/icons/game-menu/hud_filter_road_vehicles.tga")),
-      api.gui.comp.ToggleButton.new(api.gui.comp.ImageView.new("ui/TimetableTramIcon.tga")),
-      api.gui.comp.ToggleButton.new(api.gui.comp.ImageView.new("ui/icons/game-menu/hud_filter_trains.tga")),
-      api.gui.comp.ToggleButton.new(api.gui.comp.ImageView.new("ui/icons/game-menu/hud_filter_ships.tga")),
-      api.gui.comp.ToggleButton.new(api.gui.comp.ImageView.new("ui/icons/game-menu/hud_filter_planes.tga")),
+      api.gui.comp.ToggleButton.new(api.gui.comp.ImageView.new(
+          "ui/icons/game-menu/hud_filter_road_vehicles.tga")),
+      api.gui.comp.ToggleButton.new(api.gui.comp.ImageView.new(
+          "ui/TimetableTramIcon.tga")),
+      api.gui.comp.ToggleButton.new(api.gui.comp.ImageView.new(
+          "ui/icons/game-menu/hud_filter_trains.tga")),
+      api.gui.comp.ToggleButton.new(api.gui.comp.ImageView.new(
+          "ui/icons/game-menu/hud_filter_ships.tga")),
+      api.gui.comp.ToggleButton.new(api.gui.comp.ImageView.new(
+          "ui/icons/game-menu/hud_filter_planes.tga")),
   }
   lineHeader:addRow({ api.gui.comp.TextView.new(_("filter:")), table.unpack(filters) })
 
@@ -88,10 +137,12 @@ function timetableWindowFuncs.initWindow()
 
   -- Set up callbacks for all of the filters.
   for i, f in pairs(filters) do
-    f:onToggle(function() timetableWindowFuncs.refreshLines(lineTable, filters) end)
+    f:onToggle(function()
+      timetableWindowFuncs.refreshLines(lineTable, filters, lineTableRows)
+    end)
   end
   -- Rebuild the elements of the table with no filter.
-  timetableWindowFuncs.refreshLines(lineTable, filters)
+  timetableWindowFuncs.refreshLines(lineTable, filters, lineTableRows)
 
   -- Now create a scroll area to wrap the table, since there could be many
   -- lines.
@@ -130,7 +181,12 @@ function timetableWindowFuncs.initWindow()
   window:setPosition(200, 200)
   window:setVisible(false, false)
 
-  return window
+  return {
+      handle = window,
+      lineTable = lineTable,
+      lineTableRows = lineTableRows,
+      filters = filters
+  }
 end
 
 -- Open the window.
