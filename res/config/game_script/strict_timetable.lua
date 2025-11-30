@@ -25,7 +25,9 @@ local guiState = {
     handle = nil,
     -- The table object used to list the lines.
     lineTable = nil,
-    -- The rows in the line table.
+    -- The list of line names in the line table.
+    lineTableList = {},
+    -- The rows of the line table, for updating.
     lineTableRows = {},
     -- The list of filters that can be applied to the lines.
     filters = nil,
@@ -35,6 +37,8 @@ local guiState = {
     stationTableRows = {},
     -- The area in the station table that holds unassigned vehicles.
     unassignedVehiclesArea = nil,
+    -- The list of icons displayed for unassigned vehicles.
+    unassignedVehiclesIconList = {},
     -- The current list of unassigned vehicles.
     unassignedVehicles = {}
   },
