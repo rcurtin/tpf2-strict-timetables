@@ -17,7 +17,11 @@ function data()
       ["en route to "] = "en route to ",
       ["unknown vehicle"] = "unknown vehicle",
       ["not assigned to a line"] = "not assigned to a line",
-      ["unknown line"] = "unknown line"
+      ["unknown line"] = "unknown line",
+      ["unknown station"] = "unknown station",
+      -- used for tooltips in the timetable editing dialog.
+      ["add_entry"] = "Add a timetable entry.",
+      ["remove_entry"] = "Remove this timetable entry."
     }
   }
 end

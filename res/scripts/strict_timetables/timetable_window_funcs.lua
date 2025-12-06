@@ -6,6 +6,7 @@
 local miscUtils = require "strict_timetables/misc_utils"
 local vehicleUtils = require "strict_timetables/vehicle_utils"
 local lineUtils = require "strict_timetables/line_utils"
+local stationUtils = require "strict_timetables/station_utils"
 
 timetableWindowFuncs = {}
 
@@ -30,7 +31,8 @@ function timetableWindowFuncs.refreshLines(guiState)
     local hasTimetable = (guiState.timetables.hasTimetable[l] ~= nil)
 
     -- Check the filters to see if we can add the line.
-    if noFilters or guiState.timetableWindow.filters[lineType]:isSelected() then
+    if noFilters or (lineType >= 0 and
+       guiState.timetableWindow.filters[lineType + 1]:isSelected()) then
       -- TODO: actually return some kind of color code here
       table.insert(newLines, { l, "●", lineName, hasTimetable })
     end
@@ -49,6 +51,7 @@ function timetableWindowFuncs.refreshLines(guiState)
     -- Clear the table.
     guiState.timetableWindow.lineTable:deleteRows(0,
         guiState.timetableWindow.lineTable:getNumRows())
+    guiState.timetableWindow.lineTableRows = {}
 
     -- Add all of the new rows, and update the line table (don't create a new
     -- one).
@@ -82,31 +85,78 @@ function timetableWindowFuncs.refreshLines(guiState)
                     api.gui.comp.TextView.new(lineData[3]),
                     button }
       guiState.timetableWindow.lineTable:addRow(row)
-      guiState.timetableWindow.lineTableRows[i] = row
+      table.insert(guiState.timetableWindow.lineTableRows, row)
     end
+
+    guiState.timetableWindow.lineTableList = newLines
   elseif #diffKeys > 0 then
     -- We only need to update certain rows in the table.
     for k, i in pairs(diffKeys) do
+      guiState.timetableWindow.lineTableList[i] = newLines[i]
       guiState.timetableWindow.lineTableRows[i][1]:setText(newLines[i][2])
       guiState.timetableWindow.lineTableRows[i][2]:setText(newLines[i][3])
       if newLines[i][4] == true then
-        guiState.timetableWindow.lineTableRows[i][3]:setImage(
-            "ui/checkbox1.tga", false)
+        guiState.timetableWindow.lineTableRows[i][3]:setContent(
+            api.gui.comp.ImageView.new("ui/checkbox1.tga"))
       else
-        guiState.timetableWindow.lineTableRows[i][3]:setImage(
-            "ui/checkbox0.tga", false)
+        guiState.timetableWindow.lineTableRows[i][3]:setContent(
+            api.gui.comp.ImageView.new("ui/checkbox0.tga"))
       end
     end
   end
 end
 
+function timetableWindowFuncs.addTime(guiState, lineId, stopId, slotId)
+  print("add time,", tostring(lineId), tostring(stopId), tostring(slotId))
+  if not guiState.timetables.timetable[lineId] then
+    print("create timetable for line ", tostring(lineId))
+    guiState.timetables.timetable[lineId] = {}
+  end
+
+  if not guiState.timetables.timetable[lineId][stopId] then
+    print("create timetable stop ID ", tostring(stopId))
+    guiState.timetables.timetable[lineId][stopId] = {}
+  end
+
+  guiState.timetables.timetable[lineId][stopId][slotId] = "test"
+  guiState.timetableWindow.stationTableRowsChanged = true
+end
+
+function timetableWindowFuncs.modifyTime(guiState, lineId, stopId, slotId,
+    timeLabel, hrSpinbox, minSpinbox)
+
+  print("modify time!")
+  local hours = tostring(hrSpinbox:getValue())
+  if hrSpinbox:getValue() < 10 then
+    hours = "0" .. hours
+  end
+
+  local mins = tostring(minSpinbox:getValue())
+  if minSpinbox:getValue() < 10 then
+    mins = "0" .. mins
+  end
+
+  timeLabel:setText(hours .. ":" .. mins)
+
+end
+
 -- Fill the station table for a given line index.
 -- (The index refers to the row in the line table.)
 function timetableWindowFuncs.refreshStationTable(guiState, index)
+  -- Mark the station table as visible, if it's not already.
+  if guiState.timetableWindow.stationTableVisible == false then
+    print(tostring(guiState.timetableWindow.stationTableHeader))
+    guiState.timetableWindow.stationTableHeader:addRow({
+        guiState.timetableWindow.unassignedVehiclesArea })
+    guiState.timetableWindow.stationTableHeader:addRow({
+        guiState.timetableWindow.stationTable })
+    guiState.timetableWindow.stationTableVisible = true
+  end
+
   -- First get the line that we are referring to from the color marker, where we
   -- embedded the line ID earlier.
   local lineId =
-      tonumber(guiState.timetableWindow.lineTableRows[index][1]:getName())
+      tonumber(guiState.timetableWindow.lineTableList[index][1])
   local l = api.engine.getComponent(lineId, api.type.ComponentType.LINE)
 
   -- The first row of the station table contains all of the vehicles that are
@@ -121,9 +171,6 @@ function timetableWindowFuncs.refreshStationTable(guiState, index)
           vehicleUtils.getIcon(vehicle),
           vehicleUtils.getStatus(vehicle) })
     end
-  else
-    -- No vehicles are on this line, so, there is nothing to put in the
-    -- unassigned row.
   end
 
   -- Sort the vehicles by name.
@@ -140,12 +187,16 @@ function timetableWindowFuncs.refreshStationTable(guiState, index)
     for i, v in pairs(newUnassignedVehicles) do
       local icon = api.gui.comp.ImageView.new(v[2])
       icon:setTooltip(v[1] .. " (" .. v[3] .. ")")
+      icon:setGravity(1.0, 0.5)
       table.insert(iconList, icon)
     end
 
     local newTable = api.gui.comp.Table.new(#iconList + 1, "NONE")
-    newTable:addRow({ api.gui.comp.TextView.new(_("unassigned vehicles:")),
-        table.unpack(iconList) })
+    local unassignedVehiclesText = api.gui.comp.TextView.new(
+        _("unassigned vehicles:"))
+    unassignedVehiclesText:setMinimumSize(api.gui.util.Size.new(200, 30))
+    unassignedVehiclesText:setMaximumSize(api.gui.util.Size.new(200, 30))
+    newTable:addRow({ unassignedVehiclesText, table.unpack(iconList) })
 
     guiState.timetableWindow.unassignedVehicles = newUnassignedVehicles
     guiState.timetableWindow.unassignedVehiclesIconList = iconList
@@ -160,59 +211,181 @@ function timetableWindowFuncs.refreshStationTable(guiState, index)
     guiState.timetableWindow.unassignedVehicles = newUnassignedVehicles
   end
 
-  -- Now reconstruct the list of stations.
-  --local newStations = {}
-  --if l and l.stops then
-  --  for k, v in pairs(l.stops) do
-  --    -- Extract the station name.
-  --    local stationNameObject = api.engine.getComponent(v.stationGroup,
-  --      api.type.ComponentType.NAME)
-  --    local stationName = "ERROR" -- used if no name is found.
-  --    if stationNameObject and stationNameObject.name then
-  --      stationName = stationNameObject.name
-  --    end
+  -- Now reconstruct the list of stations.  First, determine if we are now
+  -- looking at a new line and need to rebuild the station table.
+  local numTimetables = lineUtils.getNumTimetableSlots(lineId,
+      guiState.timetables)
+  local currentNumTimetables =
+      guiState.timetableWindow.stationTable:getNumCols() - 3
+  if numTimetables ~= currentNumTimetables then
+    guiState.timetableWindow.stationTable:deleteRows(0,
+        guiState.timetableWindow.stationTable:getNumRows())
+    guiState.timetableWindow.stationTable:setNumCols(3 + numTimetables)
+    local i = 0
+    while i < numTimetables do
+      print("set column ", tostring(i))
+      guiState.timetableWindow.stationTable:setColWidth(i + 2, 80)
+      i = i + 1
+    end
 
-  --    -- Insert the station group ID and name.
-  --    table.insert(newStations, { v.stationGroup, 
+    local emptyViews = {}
+    while #emptyViews < 2 + numTimetables do
+      table.insert(emptyViews, api.gui.comp.TextView.new(""))
+      --guiState.timetableWindow.stationTable:setColWidth(1 + #emptyViews, 75)
+    end
+    local addButton = api.gui.comp.Button.new(api.gui.comp.TextView.new("+"),
+      true)
+    addButton:setGravity(0.0, 0.0)
+    addButton:onClick(function() timetableWindowFuncs.addTimeslot(guiState) end)
 
-  --    -- Column ideas:
-  --    --  * col 1: name of station
-  --    --
-  --    table.insert(newStations, {
-  --        api.gui.comp.TextView.new(tostring(stationName)),
-  --        api.gui.comp.TextView.new("test"),
-  --        api.gui.comp.TextView.new("test2"),
-  --        api.gui.comp.TextView.new("test3")
-  --    })
-  --  end
-  --end
+    table.insert(emptyViews, addButton)
 
-  --anyChanged = false
-  --if #newStations ~= #guiState.timetableWindow.stationTableRows then
-  --  anyChanged = true
-  --else
-  --  for i, v in pairs(newStations) do
-  --    local oldStation = guiState.timetableWindow.stationTableRows[i]
-  --    if v[1]:getText() ~= oldStation[1]:getText() then
-  --      anyChanged = true
-  --      break
-  --    end
-  --  end
-  --end
+    guiState.timetableWindow.stationTable:addRow(emptyViews)
 
-  --if anyChanged then
-  --  print("changed entries!")
-  --  -- Clear the table.
-  --  guiState.timetableWindow.stationTable:deleteRows(0,
-  --      guiState.timetableWindow.stationTable:getNumRows())
+    -- MaddButtontation data.
+    guiState.timetableWindow.stationTableData = {}
+    guiState.timetableWindow.stationTableRows = {}
+  end
 
-  --  -- Add all of the new rows, and update the line table (don't create a new
-  --  -- one).
-  --  for i, row in pairs(newStations) do
-  --    guiState.timetableWindow.stationTable:addRow(row)
-  --    guiState.timetableWindow.stationTableRows[i] = row
-  --  end
-  --end
+  local newStations = lineUtils.getStationIds(lineId)
+  local newStationGroups = lineUtils.getStationGroupIds(lineId)
+  local newStationData = {}
+  for i, v in pairs(newStations) do
+    table.insert(newStationData,
+        { v, newStationGroups[i], stationUtils.getName(newStationGroups[i]) })
+  end
+
+  -- Check to see if any station IDs or names have changed.
+  anyChanged, changedIndices = miscUtils.differs(
+      guiState.timetableWindow.stationTableData, newStationData)
+  if anyChanged or guiState.timetableWindow.stationTableRowsChanged then
+    print("force rebuild!")
+    -- We have to rebuild the table entirely.
+    guiState.timetableWindow.stationTable:deleteRows(1,
+        guiState.timetableWindow.stationTable:getNumRows())
+
+    -- Add the rows one by one.
+    local stationTableRows = {}
+    for i, v in pairs(newStationData) do
+      local nameLabel = api.gui.comp.TextView.new(v[3])
+      nameLabel:setTooltip(v[3])
+      local row = { api.gui.comp.TextView.new(tostring(i)),
+                    nameLabel }
+      -- Add any actual timetable times that we have.
+      if guiState.timetables.slots[lineId] then
+        local j = 0
+        while j < guiState.timetables.slots[lineId] do
+          if guiState.timetables.timetable[lineId] and
+              guiState.timetables.timetable[lineId][i] ~= nil and
+              guiState.timetables.timetable[lineId][i][j] ~= nil then
+            print("create selector...")
+            local time = api.gui.comp.TextView.new("00:00")
+            time:setName("StrictTimetable::TimetableEntry")
+            time:setGravity(0.5, 0.5)
+
+            local hrSpinbox = api.gui.comp.SpinBox.new(0, 59, 0)
+            hrSpinbox:setGravity(0.0, 0.5)
+            print("created spinbox")
+            hrSpinbox:getLayout():getItem(0):setVisible(false, false)
+            hrSpinbox:setMaximumSize(api.gui.util.Size.new(30, 15))
+            hrSpinbox:setName("StrictTimetable::TimetableSpinbox")
+            -- apply minimal style to + and - in the spinbox...
+            hrSpinbox:getLayout():getItem(1):getItem(0):getLayout():getItem(0):setName("StrictTimetable::TimetableSpinbox")
+            hrSpinbox:getLayout():getItem(1):getItem(1):getLayout():getItem(0):setName("StrictTimetable::TimetableSpinbox")
+
+            local minSpinbox = api.gui.comp.SpinBox.new(0, 59, 0)
+            minSpinbox:setGravity(0.0, 0.5)
+            minSpinbox:getLayout():getItem(0):setVisible(false, false)
+            minSpinbox:getLayout():getItem(1):getItem(0):getLayout():getItem(0):setName("StrictTimetable::TimetableSpinbox")
+            minSpinbox:getLayout():getItem(1):getItem(1):getLayout():getItem(0):setName("StrictTimetable::TimetableSpinbox")
+
+            hrSpinbox:onChange(function()
+                timetableWindowFuncs.modifyTime(guiState, lineId, i, slotId,
+                    time, hrSpinbox, minSpinbox)
+            end)
+            minSpinbox:onChange(function()
+                timetableWindowFuncs.modifyTime(guiState, lineId, i, slotId,
+                    time, hrSpinbox, minSpinbox)
+            end)
+
+            print("made pieces")
+            local removeLabel = api.gui.comp.TextView.new("-")
+            removeLabel:setName("StrictTimetable::RemoveButton")
+            local removeButton = api.gui.comp.Button.new(removeLabel, true)
+            removeButton:setTooltip(_("remove_entry"))
+            local t = api.gui.comp.Table.new(4, 'NONE')
+            t:addRow({ hrSpinbox, time, minSpinbox, removeButton })
+            t:setColWidth(0, 10)
+            t:setColWidth(1, 45)
+            t:setColWidth(2, 10)
+            t:setColWidth(3, 15)
+            print("made inner table")
+            table.insert(row, t)
+            print("done selector")
+          else
+            local addButton = api.gui.comp.Button.new(
+                api.gui.comp.TextView.new("+"), true)
+            addButton:setTooltip(_("add_entry"))
+            addButton:setGravity(0.5, 0.5)
+            local slotId = j
+            print("create button with j", tostring(j))
+            addButton:onClick(function()
+                timetableWindowFuncs.addTime(guiState, lineId, i, slotId)
+            end)
+            table.insert(row, addButton)
+          end
+
+          j = j + 1
+        end
+      end
+
+      -- Add an empty TextView for the last column (the one that lets you add
+      -- more timetables).
+      table.insert(row, api.gui.comp.TextView.new(""))
+      print("number of elements in row:", tostring(#row))
+      guiState.timetableWindow.stationTable:addRow(row)
+      table.insert(stationTableRows, row)
+    end
+    guiState.timetableWindow.stationTableRows = stationTableRows
+    guiState.timetableWindow.stationTableData = newStationData
+    guiState.timetableWindow.stationTableRowsChanged = false
+  elseif #changedIndices > 0 then
+    -- Change the labels of the relevant rows.
+    for i, v in pairs(changedIndices) do
+      guiState.timetableWindow.stationTableRows[v][2]:setText(
+          newStationData[v][3])
+      guiState.timetableWindow.stationTableRows[v][2]:setTooltip(
+          newStationData[v][3])
+      guiState.timetableWindow.stationTableData[v] = newStationData[v]
+    end
+  end
+end
+
+function timetableWindowFuncs.addTimeslot(guiState)
+  -- Determine the line that is currently selected.
+  print("add timeslot")
+  if #guiState.timetableWindow.lineTable:getSelected() ~= 1 then
+    -- Can't do anything, no line selected.
+    print("no line selected...")
+    return
+  end
+
+  local index = guiState.timetableWindow.lineTable:getSelected()[1]
+  print("index", tostring(index))
+  print("size of list", tostring(#guiState.timetableWindow.lineTableList))
+  local lineId = guiState.timetableWindow.lineTableList[
+      guiState.timetableWindow.lineTable:getSelected()[1] + 1][1]
+  print("lineId", tostring(lineId))
+  print("slots", tostring(guiState.timetables.slots))
+  if guiState.timetables.slots and guiState.timetables.slots[lineId] then
+    print("there is already something")
+    guiState.timetables.slots[lineId] = guiState.timetables.slots[lineId] + 1
+    print("incremented to ", guiState.timetables.slots[lineId])
+  else
+    print("we have nothing yet")
+    guiState.timetables.slots[lineId] = 1
+    print("incremented to ", guiState.timetables.slots[lineId])
+  end
 end
 
 -- Initialize the window: create all the tabs and other structure that will be
@@ -271,20 +444,29 @@ function timetableWindowFuncs.initWindow(guiState)
 
   -- Create the station table that gets shown when a line is selected.
   local stationTableHeader = api.gui.comp.Table.new(1, 'NONE')
+  local unassignedVehiclesText = api.gui.comp.TextView.new(
+      _("unassigned vehicles:"))
+  unassignedVehiclesText:setMinimumSize(api.gui.util.Size.new(200, 30))
+  unassignedVehiclesText:setMaximumSize(api.gui.util.Size.new(200, 30))
   local unassignedVehiclesArea = api.gui.comp.ScrollArea.new(
-      api.gui.comp.TextView.new("Unassigned vehicles"),
-      "strict_timetable.UnassignedVehicles")
-  unassignedVehiclesArea:setMinimumSize(api.gui.util.Size.new(560, 80))
-  unassignedVehiclesArea:setMaximumSize(api.gui.util.Size.new(560, 80))
+      unassignedVehiclesText, "strict_timetable.UnassignedVehicles")
+  unassignedVehiclesArea:setMinimumSize(api.gui.util.Size.new(560, 40))
+  unassignedVehiclesArea:setMaximumSize(api.gui.util.Size.new(560, 40))
   guiState.timetableWindow.unassignedVehiclesArea = unassignedVehiclesArea
 
-  local stationTable = api.gui.comp.Table.new(4, 'SINGLE')
-  stationTable:setColWidth(0, 40)
-  stationTable:setColWidth(1, 120)
+  local stationTable = api.gui.comp.Table.new(3, "NONE")
+  stationTable:setColWidth(0, 35)
+  stationTable:setColWidth(1, 200)
+  local addButton = api.gui.comp.Button.new(api.gui.comp.TextView.new("+"),
+      true)
+  addButton:setGravity(0.0, 0.0)
+  addButton:onClick(function() timetableWindowFuncs.addTimeslot(guiState) end)
 
-  stationTableHeader:addRow({ unassignedVehiclesArea })
-  stationTableHeader:addRow({ stationTable })
+  stationTable:addRow({ api.gui.comp.TextView.new(""),
+                        api.gui.comp.TextView.new(""),
+                        addButton })
 
+  guiState.timetableWindow.stationTableHeader = stationTableHeader
   guiState.timetableWindow.stationTable = stationTable
 
   -- The station table needs its own scroll box because there could be many
@@ -295,6 +477,8 @@ function timetableWindowFuncs.initWindow(guiState)
   stationScrollArea:setMinimumSize(api.gui.util.Size.new(560, 730))
   stationScrollArea:setMaximumSize(api.gui.util.Size.new(560, 730))
   stationScrollArea:setContent(stationTableHeader)
+  guiState.timetableWindow.stationTableVisible = false
+  guiState.timetableWindow.stationTableArea = stationScrollArea
 
   -- Next we need a layout to use for the wrapper...
   local lineTabLayout = api.gui.layout.FloatingLayout.new(0, 1)

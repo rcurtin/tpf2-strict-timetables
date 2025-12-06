@@ -17,9 +17,9 @@ function lineUtils.getName(line)
 end
 
 -- Return the type of the line (as an api.type.enum.Carrier) by inspecting the
--- first vehicle on the line.
+-- first vehicle on the line.  If no vehicles are found, we return -1.
 function lineUtils.getType(line)
-  local lineType = api.type.enum.Carrier["RAIL"] -- just an backup...
+  local lineType = -1
   local vehicles =
       api.engine.system.transportVehicleSystem.getLineVehicles(line)
   if vehicles and vehicles[1] then
@@ -31,6 +31,52 @@ function lineUtils.getType(line)
   end
 
   return lineType
+end
+
+-- Return a list of stations on a line as a list of station IDs.
+-- If a station cannot be looked up, it will not be included on the list.
+function lineUtils.getStationIds(line)
+  local l = api.engine.getComponent(line, api.type.ComponentType.LINE)
+  if not l or not l.stops then
+    return {}
+  end
+
+  local stationIds = {}
+  for i, v in pairs(l.stops) do
+    local stationGroup = api.engine.getComponent(v.stationGroup,
+        api.type.ComponentType.STATION_GROUP)
+    if stationGroup and stationGroup.stations and
+       v.station < #stationGroup.stations then
+      table.insert(stationIds, stationGroup.stations[v.station + 1])
+    end
+  end
+
+  return stationIds
+end
+
+-- Return a list of station groups on a line as a list of station group IDs.
+-- If a station cannot be looked up, it will not be included on the list.
+function lineUtils.getStationGroupIds(line)
+  local l = api.engine.getComponent(line, api.type.ComponentType.LINE)
+  if not l or not l.stops then
+    return {}
+  end
+
+  local stationGroupIds = {}
+  for i, v in pairs(l.stops) do
+    table.insert(stationGroupIds, v.stationGroup)
+  end
+
+  return stationGroupIds
+end
+
+-- Return the number of timetable slots that a line has.
+function lineUtils.getNumTimetableSlots(line, timetables)
+  if timetables and timetables.slots and timetables.slots[line] then
+    return timetables.slots[line]
+  else
+    return 0
+  end
 end
 
 return lineUtils

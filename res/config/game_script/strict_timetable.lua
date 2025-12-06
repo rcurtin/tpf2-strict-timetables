@@ -6,8 +6,10 @@ local engineState = {
   -- should not make any modifications.
   timetables = {
     hasTimetable = {}, -- Lookup table mapping bools to internal line IDs.
-    lineStationHasTimetable = {} -- Lookup table mapping (line ID, station ID)
-                                 -- to whether it is timetabled.
+    lineStationHasTimetable = {}, -- Lookup table mapping (line ID, station ID)
+                                  -- to whether it is timetabled.
+    timetable = {},
+    slots = {}
   }
 }
 
@@ -31,22 +33,35 @@ local guiState = {
     lineTableRows = {},
     -- The list of filters that can be applied to the lines.
     filters = nil,
-    -- The table holding stations and line information.
+    -- The holder for the station content.
+    stationTableArea = nil,
+    -- The outer enclosing element of the station table.
+    stationTableHeader = nil,
+    -- Whether the station table is currently being displayed.
+    stationTableVisible = false,
+    -- The table holding station and timetable information.
     stationTable = nil,
-    -- The rows in the station table.
-    stationTableRows = {},
     -- The area in the station table that holds unassigned vehicles.
     unassignedVehiclesArea = nil,
     -- The list of icons displayed for unassigned vehicles.
     unassignedVehiclesIconList = {},
     -- The current list of unassigned vehicles.
-    unassignedVehicles = {}
+    unassignedVehicles = {},
+    -- The IDs and names of the stations in the station table.
+    stationTableData = {},
+    -- The rows in the station table.
+    stationTableRows = {},
+    -- Whether we need to redraw the rows in the station table because something
+    -- may have changed.
+    stationTableRowsChanged = false
   },
   -- Timetable information for each line.
   timetables = {
     hasTimetable = {}, -- Lookup table mapping internal line IDs to bools.
-    lineStationHasTimetable = {} -- Lookup table mapping (line ID, station ID)
-                                 -- to whether it is timetabled.
+    lineStationHasTimetable = {}, -- Lookup table mapping (line ID, station ID)
+                                  -- to whether it is timetabled.
+    timetable = {},
+    slots = {} -- Mapping from line ID to the number of slots for that line.
   },
   -- Whether or not the timetable window should always
   -- be refreshed when shown.
@@ -78,6 +93,14 @@ function data()
       if not clock and loadedState and loadedState.timetables then
         print("Loading saved timetable!")
         engineState.timetables = loadedState.timetables
+        -- TODO: just for debugging...
+        if not engineState.timetables.slots then
+          engineState.timetables.slots = {}
+        end
+
+        if not engineState.timetables.timetable then
+          engineState.timetables.timetable = {}
+        end
       end
 
       -- Update clock state if it was serialized.
@@ -131,6 +154,11 @@ function data()
                 -- For whatever reason the UI component is 0-indexed but Lua is
                 -- 1-indexed...
                 (guiState.timetableWindow.lineTable:getSelected()[1] + 1))
+          elseif guiState.timetableWindow.stationTable:isVisible() then
+            -- No station is selected, so disable the station table.
+            guiState.timetableWindow.stationTableHeader:deleteRows(0,
+                guiState.timetableWindow.stationTableHeader:getNumRows())
+            guiState.timetableWindow.stationTableVisible = false
           end
         end
       elseif guiState.timetableWindow.handle:isVisible() then
@@ -138,13 +166,16 @@ function data()
         -- to refresh it (since vehicle move).  We'll do it every 20 ticks.
         guiState.ticksSinceRefresh = (guiState.ticksSinceRefresh + 1) % 20
         if guiState.ticksSinceRefresh == 0 then
-          print("attempt to refresh")
           if #guiState.timetableWindow.lineTable:getSelected() == 1 then
-            print("a line is selected")
             timetableWindowFuncs.refreshStationTable(guiState,
                 -- For whatever reason the UI component is 0-indexed but Lua is
                 -- 1-indexed...
                 (guiState.timetableWindow.lineTable:getSelected()[1] + 1))
+          elseif guiState.timetableWindow.stationTableVisible then
+            -- No station is selected, so disable the station table.
+            guiState.timetableWindow.stationTableHeader:deleteRows(0,
+                guiState.timetableWindow.stationTableHeader:getNumRows())
+            guiState.timetableWindow.stationTableVisible = false
           end
         end
       end
@@ -184,3 +215,12 @@ function data()
     end
   }
 end
+
+-- Testing:
+--
+--   * does display of unassigned vehicles scale?
+--      - make it a little taller so that the scrollbar works?
+--   * when I change lines does the view clear?
+--   * what if I apply filters
+--   * delete line that is currently being viewed
+--      -- seems like it just unselects the line?

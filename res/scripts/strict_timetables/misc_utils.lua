@@ -18,7 +18,7 @@ function miscUtils.differs(old, new)
   local diffKeys = {}
   for i, v in pairs(new) do
     newCount = newCount + 1
-    if not old[i] then
+    if old[i] == nil then
       return true, {}
     elseif type(new[i]) ~= type(old[i]) then
       table.insert(diffKeys, i)
