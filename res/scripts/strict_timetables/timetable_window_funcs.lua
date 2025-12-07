@@ -122,10 +122,8 @@ function timetableWindowFuncs.addTime(guiState, lineId, stopId, slotId)
   guiState.timetableWindow.stationTableRowsChanged = true
 end
 
-function timetableWindowFuncs.modifyTime(guiState, lineId, stopId, slotId,
-    timeLabel, hrSpinbox, minSpinbox)
-
-  print("modify time!")
+function timetableWindowFuncs.modifyTimeSpinbox(guiState, lineId, stopId,
+    slotId, timeInput, hrSpinbox, minSpinbox)
   local hours = tostring(hrSpinbox:getValue())
   if hrSpinbox:getValue() < 10 then
     hours = "0" .. hours
@@ -136,8 +134,71 @@ function timetableWindowFuncs.modifyTime(guiState, lineId, stopId, slotId,
     mins = "0" .. mins
   end
 
-  timeLabel:setText(hours .. ":" .. mins)
+  print("hours", tostring(hours), "mins", tostring(mins))
+  local newText = hours .. ":" .. mins
+  if timeInput:getText() ~= newText then
+    timeInput:setText(newText, false)
+    print("set the text now")
+  end
+  print("done with modifyTimeSpinbox")
+end
 
+function timetableWindowFuncs.modifyTimeText(guiState, lineId, stopId,
+    slotId, timeInput, hrSpinbox, minSpinbox)
+  print("modify time via text input")
+  print(tostring(string.len(timeInput:getText())))
+  print(tostring(string.sub(timeInput:getText(), 1, 1) >= '0'))
+  print(tostring(string.sub(timeInput:getText(), 1, 1) <= '5'))
+  print(tostring(string.sub(timeInput:getText(), 2, 2) >= '0'))
+  print(tostring(string.sub(timeInput:getText(), 2, 2) <= '9'))
+  print(tostring(string.sub(timeInput:getText(), 3, 3) == ':'))
+  print(tostring(string.sub(timeInput:getText(), 4, 4) >= '0'))
+  print(tostring(string.sub(timeInput:getText(), 4, 4) <= '5'))
+  print(tostring(string.sub(timeInput:getText(), 5, 5) >= '0'))
+  print(tostring(string.sub(timeInput:getText(), 5, 5) <= '9'))
+  local validInput = (string.len(timeInput:getText()) == 5) and
+      (string.sub(timeInput:getText(), 1, 1) >= '0') and
+      (string.sub(timeInput:getText(), 1, 1) <= '5') and
+      (string.sub(timeInput:getText(), 2, 2) >= '0') and
+      (string.sub(timeInput:getText(), 2, 2) <= '9') and
+      (string.sub(timeInput:getText(), 3, 3) == ':') and
+      (string.sub(timeInput:getText(), 4, 4) >= '0') and
+      (string.sub(timeInput:getText(), 4, 4) <= '5') and
+      (string.sub(timeInput:getText(), 5, 5) >= '0') and
+      (string.sub(timeInput:getText(), 5, 5) <= '9')
+  print("validInput", tostring(validInput))
+
+  if validInput then
+    -- Set the spinbox values too, if needed.
+    local hours = tonumber(string.sub(timeInput:getText(), 1, 2))
+    local mins = tonumber(string.sub(timeInput:getText(), 4, 5))
+
+    if hrSpinbox:getValue() ~= hours then
+      hrSpinbox:setValue(hours)
+    end
+    if minSpinbox:getValue() ~= mins then
+      minSpinbox:setValue(mins)
+    end
+  else
+    -- Reset to the current spinbox values.
+    timetableWindowFuncs.modifyTimeSpinbox(guiState, lineId, stopId, slotId,
+        timeInput, hrSpinbox, minSpinbox)
+  end
+  print("done")
+end
+
+function timetableWindowFuncs.removeTime(guiState, lineId, stopId, slotId)
+  print("remove time,", tostring(lineId), tostring(stopId), tostring(slotId))
+  if not guiState.timetables.timetable[lineId] then
+    return
+  end
+
+  if not guiState.timetables.timetable[lineId][stopId] then
+    return
+  end
+
+  guiState.timetables.timetable[lineId][stopId][slotId] = nil
+  guiState.timetableWindow.stationTableRowsChanged = true
 end
 
 -- Fill the station table for a given line index.
@@ -145,13 +206,12 @@ end
 function timetableWindowFuncs.refreshStationTable(guiState, index)
   -- Mark the station table as visible, if it's not already.
   if guiState.timetableWindow.stationTableVisible == false then
-    print(tostring(guiState.timetableWindow.stationTableHeader))
-    guiState.timetableWindow.stationTableHeader:addRow({
-        guiState.timetableWindow.unassignedVehiclesArea })
-    guiState.timetableWindow.stationTableHeader:addRow({
-        guiState.timetableWindow.stationTable })
+    print("skip station table refresh")
+    print("added row 2")
     guiState.timetableWindow.stationTableVisible = true
+    print("set visible")
   end
+  print("doing station table refresh")
 
   -- First get the line that we are referring to from the color marker, where we
   -- embedded the line ID earlier.
@@ -216,33 +276,32 @@ function timetableWindowFuncs.refreshStationTable(guiState, index)
   local numTimetables = lineUtils.getNumTimetableSlots(lineId,
       guiState.timetables)
   local currentNumTimetables =
-      guiState.timetableWindow.stationTable:getNumCols() - 3
+      guiState.timetableWindow.stationTable:getNumCols() - 4
   if numTimetables ~= currentNumTimetables then
     guiState.timetableWindow.stationTable:deleteRows(0,
         guiState.timetableWindow.stationTable:getNumRows())
-    guiState.timetableWindow.stationTable:setNumCols(3 + numTimetables)
+    guiState.timetableWindow.stationTable:setNumCols(4 + numTimetables)
     local i = 0
-    while i < numTimetables do
-      print("set column ", tostring(i))
-      guiState.timetableWindow.stationTable:setColWidth(i + 2, 80)
+    while i <= numTimetables do
+      -- All timetable columns have width 90 (including the new one).
+      guiState.timetableWindow.stationTable:setColWidth(i + 3, 90)
       i = i + 1
     end
 
     local emptyViews = {}
-    while #emptyViews < 2 + numTimetables do
+    while #emptyViews < 3 + numTimetables do
       table.insert(emptyViews, api.gui.comp.TextView.new(""))
-      --guiState.timetableWindow.stationTable:setColWidth(1 + #emptyViews, 75)
     end
     local addButton = api.gui.comp.Button.new(api.gui.comp.TextView.new("+"),
       true)
-    addButton:setGravity(0.0, 0.0)
+    addButton:setGravity(0.5, 0.0)
     addButton:onClick(function() timetableWindowFuncs.addTimeslot(guiState) end)
 
     table.insert(emptyViews, addButton)
 
     guiState.timetableWindow.stationTable:addRow(emptyViews)
 
-    -- MaddButtontation data.
+    -- Reset station data.
     guiState.timetableWindow.stationTableData = {}
     guiState.timetableWindow.stationTableRows = {}
   end
@@ -270,7 +329,8 @@ function timetableWindowFuncs.refreshStationTable(guiState, index)
       local nameLabel = api.gui.comp.TextView.new(v[3])
       nameLabel:setTooltip(v[3])
       local row = { api.gui.comp.TextView.new(tostring(i)),
-                    nameLabel }
+                    nameLabel,
+                    api.gui.comp.TextView.new("") }
       -- Add any actual timetable times that we have.
       if guiState.timetables.slots[lineId] then
         local j = 0
@@ -279,49 +339,60 @@ function timetableWindowFuncs.refreshStationTable(guiState, index)
               guiState.timetables.timetable[lineId][i] ~= nil and
               guiState.timetables.timetable[lineId][i][j] ~= nil then
             print("create selector...")
-            local time = api.gui.comp.TextView.new("00:00")
-            time:setName("StrictTimetable::TimetableEntry")
+            local time = api.gui.comp.TextInputField.new(
+                "StrictTimetable::TimetableEntry")
+            time:setText("00:00", false)
             time:setGravity(0.5, 0.5)
 
             local hrSpinbox = api.gui.comp.SpinBox.new(0, 59, 0)
             hrSpinbox:setGravity(0.0, 0.5)
-            print("created spinbox")
             hrSpinbox:getLayout():getItem(0):setVisible(false, false)
             hrSpinbox:setMaximumSize(api.gui.util.Size.new(30, 15))
             hrSpinbox:setName("StrictTimetable::TimetableSpinbox")
             -- apply minimal style to + and - in the spinbox...
-            hrSpinbox:getLayout():getItem(1):getItem(0):getLayout():getItem(0):setName("StrictTimetable::TimetableSpinbox")
-            hrSpinbox:getLayout():getItem(1):getItem(1):getLayout():getItem(0):setName("StrictTimetable::TimetableSpinbox")
+            hrSpinbox:getLayout():getItem(1):getItem(0):getLayout():getItem(
+                0):setName("StrictTimetable::TimetableSpinbox")
+            hrSpinbox:getLayout():getItem(1):getItem(1):getLayout():getItem(
+                0):setName("StrictTimetable::TimetableSpinbox")
 
             local minSpinbox = api.gui.comp.SpinBox.new(0, 59, 0)
             minSpinbox:setGravity(0.0, 0.5)
             minSpinbox:getLayout():getItem(0):setVisible(false, false)
-            minSpinbox:getLayout():getItem(1):getItem(0):getLayout():getItem(0):setName("StrictTimetable::TimetableSpinbox")
-            minSpinbox:getLayout():getItem(1):getItem(1):getLayout():getItem(0):setName("StrictTimetable::TimetableSpinbox")
+            minSpinbox:getLayout():getItem(1):getItem(0):getLayout():getItem(
+                0):setName("StrictTimetable::TimetableSpinbox")
+            minSpinbox:getLayout():getItem(1):getItem(1):getLayout():getItem(
+                0):setName("StrictTimetable::TimetableSpinbox")
 
-            hrSpinbox:onChange(function()
-                timetableWindowFuncs.modifyTime(guiState, lineId, i, slotId,
+            -- Set the callbacks for when the user does something to modify the
+            -- time.
+            local slotId = j
+            time:onEnter(function()
+                timetableWindowFuncs.modifyTimeText(guiState, lineId, i, slotId,
                     time, hrSpinbox, minSpinbox)
+            end)
+            hrSpinbox:onChange(function()
+                timetableWindowFuncs.modifyTimeSpinbox(guiState, lineId, i,
+                    slotId, time, hrSpinbox, minSpinbox)
             end)
             minSpinbox:onChange(function()
-                timetableWindowFuncs.modifyTime(guiState, lineId, i, slotId,
-                    time, hrSpinbox, minSpinbox)
+                timetableWindowFuncs.modifyTimeSpinbox(guiState, lineId, i,
+                    slotId, time, hrSpinbox, minSpinbox)
             end)
 
-            print("made pieces")
             local removeLabel = api.gui.comp.TextView.new("-")
             removeLabel:setName("StrictTimetable::RemoveButton")
             local removeButton = api.gui.comp.Button.new(removeLabel, true)
             removeButton:setTooltip(_("remove_entry"))
+            removeButton:onClick(function()
+                timetableWindowFuncs.removeTime(guiState, lineId, i, slotId)
+            end)
             local t = api.gui.comp.Table.new(4, 'NONE')
             t:addRow({ hrSpinbox, time, minSpinbox, removeButton })
             t:setColWidth(0, 10)
-            t:setColWidth(1, 45)
+            t:setColWidth(1, 55)
             t:setColWidth(2, 10)
             t:setColWidth(3, 15)
-            print("made inner table")
             table.insert(row, t)
-            print("done selector")
           else
             local addButton = api.gui.comp.Button.new(
                 api.gui.comp.TextView.new("+"), true)
@@ -413,12 +484,15 @@ function timetableWindowFuncs.initWindow(guiState)
   }
   lineHeader:addRow({ api.gui.comp.TextView.new(_("filter:")),
       table.unpack(guiState.timetableWindow.filters) })
+  lineHeader:setMaximumSize(api.gui.util.Size.new(250, 50))
+  lineHeader:setGravity(-1.0, 0.0)
 
   local lineTable = api.gui.comp.Table.new(3, 'SINGLE')
   lineTable:setColWidth(0, 28)
+  lineTable:setColWidth(1, 178)
+  lineTable:setColWidth(2, 30)
   lineTable:onSelect(function(i)
     if i >= 0 then
-      print("Selected line index ", tostring(i), "!")
       -- Lua is 1-indexed (and so is lineTableRows), but the comp.Table object
       -- returns 0-indexed selections.
       timetableWindowFuncs.refreshStationTable(guiState, i + 1)
@@ -438,25 +512,25 @@ function timetableWindowFuncs.initWindow(guiState)
   local lineTableScrollArea = api.gui.comp.ScrollArea.new(
       api.gui.comp.TextView.new("LineOverview"),
       "strict_timetable.LineOverview")
-  lineTableScrollArea:setMinimumSize(api.gui.util.Size.new(320, 690))
-  lineTableScrollArea:setMaximumSize(api.gui.util.Size.new(320, 690))
+  lineTableScrollArea:setMinimumSize(api.gui.util.Size.new(250, 60))
+  --lineTableScrollArea:setMaximumSize(api.gui.util.Size.new(250, 120))
   lineTableScrollArea:setContent(guiState.timetableWindow.lineTable)
+  lineTableScrollArea:setGravity(0.0, -1.0)
 
   -- Create the station table that gets shown when a line is selected.
-  local stationTableHeader = api.gui.comp.Table.new(1, 'NONE')
   local unassignedVehiclesText = api.gui.comp.TextView.new(
       _("unassigned vehicles:"))
   unassignedVehiclesText:setMinimumSize(api.gui.util.Size.new(200, 30))
   unassignedVehiclesText:setMaximumSize(api.gui.util.Size.new(200, 30))
   local unassignedVehiclesArea = api.gui.comp.ScrollArea.new(
       unassignedVehiclesText, "strict_timetable.UnassignedVehicles")
-  unassignedVehiclesArea:setMinimumSize(api.gui.util.Size.new(560, 40))
-  unassignedVehiclesArea:setMaximumSize(api.gui.util.Size.new(560, 40))
+  unassignedVehiclesArea:setGravity(-1.0, 0.0)
   guiState.timetableWindow.unassignedVehiclesArea = unassignedVehiclesArea
 
-  local stationTable = api.gui.comp.Table.new(3, "NONE")
+  local stationTable = api.gui.comp.Table.new(4, "NONE")
   stationTable:setColWidth(0, 35)
   stationTable:setColWidth(1, 200)
+  stationTable:setGravity(-1.0, 0.0)
   local addButton = api.gui.comp.Button.new(api.gui.comp.TextView.new("+"),
       true)
   addButton:setGravity(0.0, 0.0)
@@ -464,9 +538,8 @@ function timetableWindowFuncs.initWindow(guiState)
 
   stationTable:addRow({ api.gui.comp.TextView.new(""),
                         api.gui.comp.TextView.new(""),
+                        api.gui.comp.TextView.new(""), -- blank filler
                         addButton })
-
-  guiState.timetableWindow.stationTableHeader = stationTableHeader
   guiState.timetableWindow.stationTable = stationTable
 
   -- The station table needs its own scroll box because there could be many
@@ -474,34 +547,34 @@ function timetableWindowFuncs.initWindow(guiState)
   local stationScrollArea = api.gui.comp.ScrollArea.new(
       api.gui.comp.TextView.new("StationScrollArea"),
       "strict_timetable.StationOverview")
-  stationScrollArea:setMinimumSize(api.gui.util.Size.new(560, 730))
-  stationScrollArea:setMaximumSize(api.gui.util.Size.new(560, 730))
-  stationScrollArea:setContent(stationTableHeader)
+  stationScrollArea:setMinimumSize(api.gui.util.Size.new(200, 30))
+  stationScrollArea:setContent(stationTable)
+  stationScrollArea:setGravity(-1.0, -1.0)
+
   guiState.timetableWindow.stationTableVisible = false
-  guiState.timetableWindow.stationTableArea = stationScrollArea
 
-  -- Next we need a layout to use for the wrapper...
-  local lineTabLayout = api.gui.layout.FloatingLayout.new(0, 1)
-  lineTabLayout:setId("strict_timetable.lineTabLayout")
-  lineTabLayout:setGravity(-1, -1)
-  lineTabLayout:addItem(lineHeader, 0, 0)
-  lineTabLayout:addItem(lineTableScrollArea, 0, 1)
-  lineTabLayout:addItem(stationScrollArea, 0.5, 0)
+  local lineWrapper = api.gui.comp.Component.new("line_wrapper")
+  lineWrapper:setGravity(0.0, -1.0)
+  local lineLayout = api.gui.layout.BoxLayout.new("VERTICAL")
+  lineLayout:addItem(lineHeader)
+  lineLayout:addItem(lineTableScrollArea)
+  lineWrapper:setLayout(lineLayout)
 
-  -- Next we need a wrapper for the content of the tab.
-  local lineTab = api.gui.comp.Component.new("wrapper")
-  lineTab:setLayout(lineTabLayout)
+  local stationWrapper = api.gui.comp.Component.new("station_wrapper")
+  stationWrapper:setGravity(-1.0, 0.0)
+  local stationLayout = api.gui.layout.BoxLayout.new("VERTICAL")
+  stationLayout:addItem(unassignedVehiclesArea)
+  stationLayout:addItem(stationScrollArea)
+  stationWrapper:setLayout(stationLayout)
 
-  local tabWidget = api.gui.comp.TabWidget.new("NORTH")
-  tabWidget:addTab(api.gui.comp.TextView.new(_("lines")), lineTab)
-  --tabWidget:onCurrentChanged(function(i)
-  --  print("Changed tab to ", tostring(i))
-  --  if i == 0 then
-  --    timetableWindowFuncs.
-  --  end
-  --end)
+  local windowWrapper = api.gui.comp.Component.new("window_wrapper")
+  windowWrapper:setGravity(-1.0, -1.0)
+  local windowLayout = api.gui.layout.BoxLayout.new("HORIZONTAL")
+  windowLayout:addItem(lineWrapper)
+  windowLayout:addItem(stationWrapper)
+  windowWrapper:setLayout(windowLayout)
 
-  local window = api.gui.comp.Window.new(_("timetables"), tabWidget)
+  local window = api.gui.comp.Window.new(_("timetables"), windowWrapper)
   window:addHideOnCloseHandler()
   window:setMovable(true)
   window:setPinButtonVisible(true)

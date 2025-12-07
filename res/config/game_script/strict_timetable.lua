@@ -25,6 +25,8 @@ local guiState = {
   timetableWindow = {
     -- The handle to the main window.
     handle = nil,
+    -- The last known size of the main window.
+    size = nil,
     -- The table object used to list the lines.
     lineTable = nil,
     -- The list of line names in the line table.
@@ -33,10 +35,6 @@ local guiState = {
     lineTableRows = {},
     -- The list of filters that can be applied to the lines.
     filters = nil,
-    -- The holder for the station content.
-    stationTableArea = nil,
-    -- The outer enclosing element of the station table.
-    stationTableHeader = nil,
     -- Whether the station table is currently being displayed.
     stationTableVisible = false,
     -- The table holding station and timetable information.
@@ -156,9 +154,7 @@ function data()
                 (guiState.timetableWindow.lineTable:getSelected()[1] + 1))
           elseif guiState.timetableWindow.stationTable:isVisible() then
             -- No station is selected, so disable the station table.
-            guiState.timetableWindow.stationTableHeader:deleteRows(0,
-                guiState.timetableWindow.stationTableHeader:getNumRows())
-            guiState.timetableWindow.stationTableVisible = false
+            -- TODO
           end
         end
       elseif guiState.timetableWindow.handle:isVisible() then
@@ -173,9 +169,7 @@ function data()
                 (guiState.timetableWindow.lineTable:getSelected()[1] + 1))
           elseif guiState.timetableWindow.stationTableVisible then
             -- No station is selected, so disable the station table.
-            guiState.timetableWindow.stationTableHeader:deleteRows(0,
-                guiState.timetableWindow.stationTableHeader:getNumRows())
-            guiState.timetableWindow.stationTableVisible = false
+            -- TODO
           end
         end
       end
