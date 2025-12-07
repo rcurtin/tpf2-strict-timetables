@@ -35,10 +35,10 @@ local guiState = {
     lineTableRows = {},
     -- The list of filters that can be applied to the lines.
     filters = nil,
-    -- Whether the station table is currently being displayed.
-    stationTableVisible = false,
     -- The table holding station and timetable information.
     stationTable = nil,
+    -- The table holding information about duplicating timetables.
+    stationDuplicateTable = nil,
     -- The area in the station table that holds unassigned vehicles.
     unassignedVehiclesArea = nil,
     -- The list of icons displayed for unassigned vehicles.
@@ -154,7 +154,7 @@ function data()
                 (guiState.timetableWindow.lineTable:getSelected()[1] + 1))
           elseif guiState.timetableWindow.stationTable:isVisible() then
             -- No station is selected, so disable the station table.
-            -- TODO
+            guiState.timetableWindow.stationTable:setVisible(false, false)
           end
         end
       elseif guiState.timetableWindow.handle:isVisible() then
@@ -167,9 +167,9 @@ function data()
                 -- For whatever reason the UI component is 0-indexed but Lua is
                 -- 1-indexed...
                 (guiState.timetableWindow.lineTable:getSelected()[1] + 1))
-          elseif guiState.timetableWindow.stationTableVisible then
+          elseif guiState.timetableWindow.stationTable:isVisible() then
             -- No station is selected, so disable the station table.
-            -- TODO
+            guiState.timetableWindow.stationTable:setVisible(false, false)
           end
         end
       end

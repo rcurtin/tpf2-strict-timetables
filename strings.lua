@@ -21,7 +21,10 @@ function data()
       ["unknown station"] = "unknown station",
       -- used for tooltips in the timetable editing dialog.
       ["add_entry"] = "Add a timetable entry.",
-      ["remove_entry"] = "Remove this timetable entry."
+      ["remove_entry"] = "Remove this timetable entry.",
+      ["duplicate_text"] = "Duplicate timetable:",
+      ["apply"] = "Apply!",
+      ["apply_tooltip"] = "Apply the timetable spacing with the selected spacing.\n(If no spacing is selected, nothing happens.)\n\nThis will *overwrite* every slot in the existing timetable\nafter the first with new timeslots that have the specified\nspacing from the original."
     }
   }
 end

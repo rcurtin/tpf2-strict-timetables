@@ -205,13 +205,9 @@ end
 -- (The index refers to the row in the line table.)
 function timetableWindowFuncs.refreshStationTable(guiState, index)
   -- Mark the station table as visible, if it's not already.
-  if guiState.timetableWindow.stationTableVisible == false then
-    print("skip station table refresh")
-    print("added row 2")
-    guiState.timetableWindow.stationTableVisible = true
-    print("set visible")
+  if guiState.timetableWindow.stationTable:isVisible() == false then
+    guiState.timetableWindow.stationTable:setVisible(true, true)
   end
-  print("doing station table refresh")
 
   -- First get the line that we are referring to from the color marker, where we
   -- embedded the line ID earlier.
@@ -227,6 +223,7 @@ function timetableWindowFuncs.refreshStationTable(guiState, index)
   if lineVehiclesMap and lineVehiclesMap[lineId] then
     for i, vehicle in pairs(lineVehiclesMap[lineId]) do
       table.insert(newUnassignedVehicles, {
+          vehicle,
           vehicleUtils.getName(vehicle),
           vehicleUtils.getIcon(vehicle),
           vehicleUtils.getStatus(vehicle) })
@@ -235,7 +232,7 @@ function timetableWindowFuncs.refreshStationTable(guiState, index)
 
   -- Sort the vehicles by name.
   table.sort(newUnassignedVehicles, function(x, y)
-      return string.lower(x[1]) < string.lower(y[1])
+      return string.lower(x[2]) < string.lower(y[2])
   end)
 
   -- Check to see if any of the unassigned vehicles have changed.
@@ -245,8 +242,13 @@ function timetableWindowFuncs.refreshStationTable(guiState, index)
     -- We need to rebuild the list from scratch.
     local iconList = {}
     for i, v in pairs(newUnassignedVehicles) do
-      local icon = api.gui.comp.ImageView.new(v[2])
-      icon:setTooltip(v[1] .. " (" .. v[3] .. ")")
+      local icon = api.gui.comp.Button.new(api.gui.comp.ImageView.new(v[3]),
+          true)
+      local vId = v[1]
+      icon:onClick(function()
+          api.gui.util.getGameUI():getViewManager():openWindow(vId, true, 0)
+      end)
+      icon:setTooltip(v[2] .. " (" .. v[4] .. ")")
       icon:setGravity(1.0, 0.5)
       table.insert(iconList, icon)
     end
@@ -264,7 +266,7 @@ function timetableWindowFuncs.refreshStationTable(guiState, index)
   elseif #changedIndices > 0 then
     for i, v in pairs(changedIndices) do
       guiState.timetableWindow.unassignedVehiclesIconList[v]:setTooltip(
-          newUnassignedVehicles[v][1] .. " (" .. newUnassignedVehicles[v][3] ..
+          newUnassignedVehicles[v][2] .. " (" .. newUnassignedVehicles[v][4] ..
           ")")
     end
 
@@ -275,6 +277,9 @@ function timetableWindowFuncs.refreshStationTable(guiState, index)
   -- looking at a new line and need to rebuild the station table.
   local numTimetables = lineUtils.getNumTimetableSlots(lineId,
       guiState.timetables)
+  if numTimetables > 0 then
+    guiState.timetableWindow.stationDuplicateTable:setVisible(true, true)
+  end
   local currentNumTimetables =
       guiState.timetableWindow.stationTable:getNumCols() - 4
   if numTimetables ~= currentNumTimetables then
@@ -551,7 +556,27 @@ function timetableWindowFuncs.initWindow(guiState)
   stationScrollArea:setContent(stationTable)
   stationScrollArea:setGravity(-1.0, -1.0)
 
-  guiState.timetableWindow.stationTableVisible = false
+  -- If a station has a timetable, this will be how it is duplicated.
+  local stationDuplicateTable = api.gui.comp.Table.new(3, 'NONE')
+  stationDuplicateTable:setGravity(0.0, 0.0)
+  local stationDuplicateText = api.gui.comp.TextView.new(_("duplicate_text"))
+  local stationDuplicateCombobox = api.gui.comp.ComboBox.new()
+  local separationList = {30, 20, 15, 12, 10, 7.5, 6, 5, 4, 3, 2.5, 2, 1.5, 1.2,
+      1}
+  for k, v in ipairs(separationList) do
+    stationDuplicateCombobox:addItem(v .. " min (" .. 60 / v .. "/h)")
+  end
+  stationDuplicateCombobox:setGravity(1.0, 0.0)
+  local stationDuplicateApplyLabel = api.gui.comp.TextView.new(_("apply"))
+  stationDuplicateApplyLabel:setTooltip(_("apply_tooltip"))
+  local stationDuplicateApply = api.gui.comp.Button.new(
+      stationDuplicateApplyLabel, true)
+  stationDuplicateApply:setGravity(1.0, 0.0)
+  -- TODO: onClick()
+  stationDuplicateTable:addRow({ stationDuplicateText, stationDuplicateCombobox,
+      stationDuplicateApply })
+  stationDuplicateTable:setVisible(false, false)
+  guiState.timetableWindow.stationDuplicateTable = stationDuplicateTable
 
   local lineWrapper = api.gui.comp.Component.new("line_wrapper")
   lineWrapper:setGravity(0.0, -1.0)
@@ -565,6 +590,7 @@ function timetableWindowFuncs.initWindow(guiState)
   local stationLayout = api.gui.layout.BoxLayout.new("VERTICAL")
   stationLayout:addItem(unassignedVehiclesArea)
   stationLayout:addItem(stationScrollArea)
+  stationLayout:addItem(stationDuplicateTable)
   stationWrapper:setLayout(stationLayout)
 
   local windowWrapper = api.gui.comp.Component.new("window_wrapper")

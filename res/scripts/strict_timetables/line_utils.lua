@@ -80,3 +80,11 @@ function lineUtils.getNumTimetableSlots(line, timetables)
 end
 
 return lineUtils
+
+-- Next thoughts:
+--    * dispatch changes in addTime() to the engine state
+--    * dispatch changes in modifyTime() to the engine state
+--    * add a button to duplicate the first timetable every N minutes
+--
+-- Later:
+--    * annotate vehicle timetable history?
