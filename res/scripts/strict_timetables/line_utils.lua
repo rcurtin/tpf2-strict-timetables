@@ -82,9 +82,12 @@ end
 return lineUtils
 
 -- Next thoughts:
---    * dispatch changes in addTime() to the engine state
---    * dispatch changes in modifyTime() to the engine state
---    * add a button to duplicate the first timetable every N minutes
+--    * implement button to duplicate the first timetable every N minutes
+--    * augment color codes onto the line table
 --
 -- Later:
 --    * annotate vehicle timetable history?
+--    * handle when stations change
+--
+-- Bugs:
+--    * default empty window does not show any lines, you have to click filters

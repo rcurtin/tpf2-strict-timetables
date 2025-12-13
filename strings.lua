@@ -20,6 +20,7 @@ function data()
       ["unknown line"] = "unknown line",
       ["unknown station"] = "unknown station",
       -- used for tooltips in the timetable editing dialog.
+      ["remove_slot"] = "Remove this timetable slot (all entries in this column).",
       ["add_entry"] = "Add a timetable entry.",
       ["remove_entry"] = "Remove this timetable entry.",
       ["duplicate_text"] = "Duplicate timetable:",

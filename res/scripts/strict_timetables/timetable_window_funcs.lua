@@ -10,6 +10,9 @@ local stationUtils = require "strict_timetables/station_utils"
 
 timetableWindowFuncs = {}
 
+timetableWindowFuncs.separationList = {30, 20, 15, 12, 10, 7.5, 6, 5, 4, 3, 2.5,
+    2, 1.5, 1.2, 1, 0.5}
+
 -- Add all of the lines to the line table, using the states of the given filters
 -- to select which lines are displayed.  The existing rows in the line table
 -- must be stored in the GUI state because it seems there is no way to recover
@@ -75,10 +78,13 @@ function timetableWindowFuncs.refreshLines(guiState)
         -- modified.
         table.insert(guiState.callbacks, function()
             api.cmd.sendCommand(api.cmd.make.sendScriptEvent(
-                "strict_timetables.lua", "timetable_update", "toggle_timetable",
-                { line = lineData[1],
-                  value = guiState.timetables.hasTimetable[lineData[1]] }))
-        end)
+                "strict_timetables.lua",
+                "timetable_update",
+                "toggle_timetable",
+                {
+                  line = lineData[1],
+                  value = guiState.timetables.hasTimetable[lineData[1]]
+                })) end)
       end)
 
       local row = { api.gui.comp.TextView.new(lineData[2]),
@@ -106,56 +112,132 @@ function timetableWindowFuncs.refreshLines(guiState)
   end
 end
 
+--
+-- Add a timeslot to the timetable for the given line and stop.
+-- The default time will be set to 00:00.
+--
 function timetableWindowFuncs.addTime(guiState, lineId, stopId, slotId)
-  print("add time,", tostring(lineId), tostring(stopId), tostring(slotId))
   if not guiState.timetables.timetable[lineId] then
-    print("create timetable for line ", tostring(lineId))
     guiState.timetables.timetable[lineId] = {}
   end
 
-  if not guiState.timetables.timetable[lineId][stopId] then
-    print("create timetable stop ID ", tostring(stopId))
-    guiState.timetables.timetable[lineId][stopId] = {}
+  if not guiState.timetables.timetable[lineId][slotId] then
+    guiState.timetables.timetable[lineId][slotId] = {}
   end
 
-  guiState.timetables.timetable[lineId][stopId][slotId] = "test"
+  guiState.timetables.timetable[lineId][slotId][stopId] = { 0, 0 }
   guiState.timetableWindow.stationTableRowsChanged = true
+  table.insert(guiState.callbacks, function()
+      api.cmd.sendCommand(api.cmd.make.sendScriptEvent(
+          "strict_timetables.lua",
+          "timetable_update",
+          "update_time",
+          { line = lineId, stop = stopId, slot = slotId,
+            mins = 0, secs = 0 })) end)
 end
 
-function timetableWindowFuncs.modifyTimeSpinbox(guiState, lineId, stopId,
-    slotId, timeInput, hrSpinbox, minSpinbox)
-  local hours = tostring(hrSpinbox:getValue())
-  if hrSpinbox:getValue() < 10 then
-    hours = "0" .. hours
+function timetableWindowFuncs.addTimeslot(guiState)
+  -- Determine the line that is currently selected.
+  if #guiState.timetableWindow.lineTable:getSelected() ~= 1 then
+    -- Can't do anything, no line selected.
+    return
   end
 
+  local index = guiState.timetableWindow.lineTable:getSelected()[1]
+  local lineId = guiState.timetableWindow.lineTableList[
+      guiState.timetableWindow.lineTable:getSelected()[1] + 1][1]
+  if guiState.timetables.slots and guiState.timetables.slots[lineId] then
+    guiState.timetables.slots[lineId] = guiState.timetables.slots[lineId] + 1
+  else
+    guiState.timetables.slots[lineId] = 1
+  end
+
+  -- Enqueue a message to be sent on callback.  If there already is one, then
+  -- increment the number of slots to be added.
+  table.insert(guiState.callbacks, function()
+      api.cmd.sendCommand(api.cmd.make.sendScriptEvent(
+          "strict_timetables.lua",
+          "timetable_update",
+          "add_timeslot",
+          { line = lineId })) end)
+end
+
+function timetableWindowFuncs.removeTimeslot(guiState, slotId)
+  -- Determine the line that is currently selected.
+  if #guiState.timetableWindow.lineTable:getSelected() ~= 1 then
+    -- Can't do anything, no line selected.
+    return
+  end
+
+  local index = guiState.timetableWindow.lineTable:getSelected()[1]
+  local lineId = guiState.timetableWindow.lineTableList[
+      guiState.timetableWindow.lineTable:getSelected()[1] + 1][1]
+  if guiState.timetables.slots and guiState.timetables.slots[lineId] then
+    if guiState.timetables.slots[lineId] > 1 then
+      guiState.timetables.slots[lineId] = guiState.timetables.slots[lineId] - 1
+    else
+      guiState.timetables.slots[lineId] = nil
+    end
+  end
+
+  -- Now remove it from the actual timetables.
+  if guiState.timetables.timetable and guiState.timetables.timetable[lineId] and
+      slotId <= #guiState.timetables.timetable[lineId] then
+    -- Remove the entire slot, shifting all later slots left.
+    table.remove(guiState.timetables.timetable[lineId], slotId)
+  end
+
+  table.insert(guiState.callbacks, function()
+      api.cmd.sendCommand(api.cmd.make.sendScriptEvent(
+          "strict_timetables.lua",
+          "timetable_update",
+          "remove_timeslot",
+          { line = lineId, slot = slotId })) end)
+end
+
+--
+-- Modify a timetable using the spinbox.  This is called as a callback whenever
+-- the spinboxes are changed.
+--
+function timetableWindowFuncs.modifyTimeSpinbox(guiState, lineId, stopId,
+    slotId, timeInput, minSpinbox, secSpinbox)
   local mins = tostring(minSpinbox:getValue())
   if minSpinbox:getValue() < 10 then
     mins = "0" .. mins
   end
 
-  print("hours", tostring(hours), "mins", tostring(mins))
-  local newText = hours .. ":" .. mins
+  local secs = tostring(secSpinbox:getValue())
+  if secSpinbox:getValue() < 10 then
+    secs = "0" .. secs
+  end
+
+  local newText = mins .. ":" .. secs
   if timeInput:getText() ~= newText then
     timeInput:setText(newText, false)
-    print("set the text now")
   end
-  print("done with modifyTimeSpinbox")
+
+  local numMins = tonumber(mins)
+  local numSecs = tonumber(secs)
+  if not guiState.timetables.timetable[lineId][slotId][stopId] or
+      guiState.timetables.timetable[lineId][slotId][stopId][1] ~= numMins or
+      guiState.timetables.timetable[lineId][slotId][stopId][2] ~= numSecs then
+    guiState.timetables.timetable[lineId][slotId][stopId] = { numMins, numSecs }
+    table.insert(guiState.callbacks, function()
+        api.cmd.sendCommand(api.cmd.make.sendScriptEvent(
+            "strict_timetables.lua",
+            "timetable_update",
+            "update_time",
+            { line = lineId, slot = slotId, stop = stopId,
+              mins = numMins, secs = numSecs })) end)
+  end
 end
 
+--
+-- Modify a timetable entry using the textbox.  This is called as a callback
+-- whenever the text of the text input field is changed.
+--
 function timetableWindowFuncs.modifyTimeText(guiState, lineId, stopId,
-    slotId, timeInput, hrSpinbox, minSpinbox)
-  print("modify time via text input")
-  print(tostring(string.len(timeInput:getText())))
-  print(tostring(string.sub(timeInput:getText(), 1, 1) >= '0'))
-  print(tostring(string.sub(timeInput:getText(), 1, 1) <= '5'))
-  print(tostring(string.sub(timeInput:getText(), 2, 2) >= '0'))
-  print(tostring(string.sub(timeInput:getText(), 2, 2) <= '9'))
-  print(tostring(string.sub(timeInput:getText(), 3, 3) == ':'))
-  print(tostring(string.sub(timeInput:getText(), 4, 4) >= '0'))
-  print(tostring(string.sub(timeInput:getText(), 4, 4) <= '5'))
-  print(tostring(string.sub(timeInput:getText(), 5, 5) >= '0'))
-  print(tostring(string.sub(timeInput:getText(), 5, 5) <= '9'))
+    slotId, timeInput, minSpinbox, secSpinbox)
   local validInput = (string.len(timeInput:getText()) == 5) and
       (string.sub(timeInput:getText(), 1, 1) >= '0') and
       (string.sub(timeInput:getText(), 1, 1) <= '5') and
@@ -166,29 +248,39 @@ function timetableWindowFuncs.modifyTimeText(guiState, lineId, stopId,
       (string.sub(timeInput:getText(), 4, 4) <= '5') and
       (string.sub(timeInput:getText(), 5, 5) >= '0') and
       (string.sub(timeInput:getText(), 5, 5) <= '9')
-  print("validInput", tostring(validInput))
 
   if validInput then
     -- Set the spinbox values too, if needed.
-    local hours = tonumber(string.sub(timeInput:getText(), 1, 2))
-    local mins = tonumber(string.sub(timeInput:getText(), 4, 5))
+    local mins = tonumber(string.sub(timeInput:getText(), 1, 2))
+    local secs = tonumber(string.sub(timeInput:getText(), 4, 5))
 
-    if hrSpinbox:getValue() ~= hours then
-      hrSpinbox:setValue(hours)
-    end
     if minSpinbox:getValue() ~= mins then
       minSpinbox:setValue(mins)
+    end
+    if secSpinbox:getValue() ~= secs then
+      secSpinbox:setValue(secs)
+    end
+
+    if not guiState.timetables.timetable[lineId][slotId][stopId] or
+        guiState.timetables.timetable[lineId][slotId][stopId][1] ~= mins or
+        guiState.timetables.timetable[lineId][slotId][stopId][2] ~= secs then
+      guiState.timetables.timetable[lineId][slotId][stopId] = { mins, secs }
+      table.insert(guiState.callbacks, function()
+          api.cmd.sendCommand(api.cmd.make.sendScriptEvent(
+              "strict_timetables.lua",
+              "timetable_update",
+              "update_time",
+              { line = lineId, slot = slotId, stop = stopId,
+                mins = mins, secs = secs })) end)
     end
   else
     -- Reset to the current spinbox values.
     timetableWindowFuncs.modifyTimeSpinbox(guiState, lineId, stopId, slotId,
-        timeInput, hrSpinbox, minSpinbox)
+        timeInput, minSpinbox, secSpinbox)
   end
-  print("done")
 end
 
 function timetableWindowFuncs.removeTime(guiState, lineId, stopId, slotId)
-  print("remove time,", tostring(lineId), tostring(stopId), tostring(slotId))
   if not guiState.timetables.timetable[lineId] then
     return
   end
@@ -197,8 +289,14 @@ function timetableWindowFuncs.removeTime(guiState, lineId, stopId, slotId)
     return
   end
 
-  guiState.timetables.timetable[lineId][stopId][slotId] = nil
+  guiState.timetables.timetable[lineId][slotId][stopId] = nil
   guiState.timetableWindow.stationTableRowsChanged = true
+  table.insert(guiState.callbacks, function()
+      api.cmd.sendCommand(api.cmd.make.sendScriptEvent(
+          "strict_timetables.lua",
+          "timetable_update",
+          "remove_time",
+          { line = lineId, slot = slotId, stop = stopId })) end)
 end
 
 -- Fill the station table for a given line index.
@@ -293,9 +391,20 @@ function timetableWindowFuncs.refreshStationTable(guiState, index)
       i = i + 1
     end
 
-    local emptyViews = {}
+    local emptyViews = {
+        api.gui.comp.TextView.new(""),
+        api.gui.comp.TextView.new(""),
+        api.gui.comp.TextView.new("")
+    }
     while #emptyViews < 3 + numTimetables do
-      table.insert(emptyViews, api.gui.comp.TextView.new(""))
+      local removeLabel = api.gui.comp.TextView.new("-")
+      removeLabel:setTooltip(_("remove_slot"))
+      local removeButton = api.gui.comp.Button.new(removeLabel, true)
+      local slotId = #emptyViews - 2
+      removeButton:onClick(function()
+          timetableWindowFuncs.removeTimeslot(guiState, slotId)
+      end)
+      table.insert(emptyViews, removeButton)
     end
     local addButton = api.gui.comp.Button.new(api.gui.comp.TextView.new("+"),
       true)
@@ -323,7 +432,6 @@ function timetableWindowFuncs.refreshStationTable(guiState, index)
   anyChanged, changedIndices = miscUtils.differs(
       guiState.timetableWindow.stationTableData, newStationData)
   if anyChanged or guiState.timetableWindow.stationTableRowsChanged then
-    print("force rebuild!")
     -- We have to rebuild the table entirely.
     guiState.timetableWindow.stationTable:deleteRows(1,
         guiState.timetableWindow.stationTable:getNumRows())
@@ -338,34 +446,45 @@ function timetableWindowFuncs.refreshStationTable(guiState, index)
                     api.gui.comp.TextView.new("") }
       -- Add any actual timetable times that we have.
       if guiState.timetables.slots[lineId] then
-        local j = 0
-        while j < guiState.timetables.slots[lineId] do
+        local j = 1
+        while j <= guiState.timetables.slots[lineId] do
           if guiState.timetables.timetable[lineId] and
-              guiState.timetables.timetable[lineId][i] ~= nil and
-              guiState.timetables.timetable[lineId][i][j] ~= nil then
-            print("create selector...")
+              guiState.timetables.timetable[lineId][j] ~= nil and
+              guiState.timetables.timetable[lineId][j][i] ~= nil then
+            local mins = guiState.timetables.timetable[lineId][j][i][1]
+            local secs = guiState.timetables.timetable[lineId][j][i][2]
+
+            local minStr = tostring(mins)
+            if mins < 10 then
+              minStr = "0" .. minStr
+            end
+            local secStr = tostring(secs)
+            if secs < 10 then
+              secStr = "0" .. secStr
+            end
+
             local time = api.gui.comp.TextInputField.new(
                 "StrictTimetable::TimetableEntry")
-            time:setText("00:00", false)
+            time:setText(minStr .. ":" .. secStr, false)
             time:setGravity(0.5, 0.5)
 
-            local hrSpinbox = api.gui.comp.SpinBox.new(0, 59, 0)
-            hrSpinbox:setGravity(0.0, 0.5)
-            hrSpinbox:getLayout():getItem(0):setVisible(false, false)
-            hrSpinbox:setMaximumSize(api.gui.util.Size.new(30, 15))
-            hrSpinbox:setName("StrictTimetable::TimetableSpinbox")
-            -- apply minimal style to + and - in the spinbox...
-            hrSpinbox:getLayout():getItem(1):getItem(0):getLayout():getItem(
-                0):setName("StrictTimetable::TimetableSpinbox")
-            hrSpinbox:getLayout():getItem(1):getItem(1):getLayout():getItem(
-                0):setName("StrictTimetable::TimetableSpinbox")
-
-            local minSpinbox = api.gui.comp.SpinBox.new(0, 59, 0)
+            local minSpinbox = api.gui.comp.SpinBox.new(0, 59, mins)
             minSpinbox:setGravity(0.0, 0.5)
             minSpinbox:getLayout():getItem(0):setVisible(false, false)
+            minSpinbox:setMaximumSize(api.gui.util.Size.new(30, 15))
+            minSpinbox:setName("StrictTimetable::TimetableSpinbox")
+            -- apply minimal style to + and - in the spinbox...
             minSpinbox:getLayout():getItem(1):getItem(0):getLayout():getItem(
                 0):setName("StrictTimetable::TimetableSpinbox")
             minSpinbox:getLayout():getItem(1):getItem(1):getLayout():getItem(
+                0):setName("StrictTimetable::TimetableSpinbox")
+
+            local secSpinbox = api.gui.comp.SpinBox.new(0, 59, secs)
+            secSpinbox:setGravity(0.0, 0.5)
+            secSpinbox:getLayout():getItem(0):setVisible(false, false)
+            secSpinbox:getLayout():getItem(1):getItem(0):getLayout():getItem(
+                0):setName("StrictTimetable::TimetableSpinbox")
+            secSpinbox:getLayout():getItem(1):getItem(1):getLayout():getItem(
                 0):setName("StrictTimetable::TimetableSpinbox")
 
             -- Set the callbacks for when the user does something to modify the
@@ -373,15 +492,15 @@ function timetableWindowFuncs.refreshStationTable(guiState, index)
             local slotId = j
             time:onEnter(function()
                 timetableWindowFuncs.modifyTimeText(guiState, lineId, i, slotId,
-                    time, hrSpinbox, minSpinbox)
-            end)
-            hrSpinbox:onChange(function()
-                timetableWindowFuncs.modifyTimeSpinbox(guiState, lineId, i,
-                    slotId, time, hrSpinbox, minSpinbox)
+                    time, minSpinbox, secSpinbox)
             end)
             minSpinbox:onChange(function()
                 timetableWindowFuncs.modifyTimeSpinbox(guiState, lineId, i,
-                    slotId, time, hrSpinbox, minSpinbox)
+                    slotId, time, minSpinbox, secSpinbox)
+            end)
+            secSpinbox:onChange(function()
+                timetableWindowFuncs.modifyTimeSpinbox(guiState, lineId, i,
+                    slotId, time, minSpinbox, secSpinbox)
             end)
 
             local removeLabel = api.gui.comp.TextView.new("-")
@@ -392,7 +511,7 @@ function timetableWindowFuncs.refreshStationTable(guiState, index)
                 timetableWindowFuncs.removeTime(guiState, lineId, i, slotId)
             end)
             local t = api.gui.comp.Table.new(4, 'NONE')
-            t:addRow({ hrSpinbox, time, minSpinbox, removeButton })
+            t:addRow({ minSpinbox, time, secSpinbox, removeButton })
             t:setColWidth(0, 10)
             t:setColWidth(1, 55)
             t:setColWidth(2, 10)
@@ -404,7 +523,6 @@ function timetableWindowFuncs.refreshStationTable(guiState, index)
             addButton:setTooltip(_("add_entry"))
             addButton:setGravity(0.5, 0.5)
             local slotId = j
-            print("create button with j", tostring(j))
             addButton:onClick(function()
                 timetableWindowFuncs.addTime(guiState, lineId, i, slotId)
             end)
@@ -418,7 +536,6 @@ function timetableWindowFuncs.refreshStationTable(guiState, index)
       -- Add an empty TextView for the last column (the one that lets you add
       -- more timetables).
       table.insert(row, api.gui.comp.TextView.new(""))
-      print("number of elements in row:", tostring(#row))
       guiState.timetableWindow.stationTable:addRow(row)
       table.insert(stationTableRows, row)
     end
@@ -437,31 +554,74 @@ function timetableWindowFuncs.refreshStationTable(guiState, index)
   end
 end
 
-function timetableWindowFuncs.addTimeslot(guiState)
-  -- Determine the line that is currently selected.
-  print("add timeslot")
-  if #guiState.timetableWindow.lineTable:getSelected() ~= 1 then
-    -- Can't do anything, no line selected.
-    print("no line selected...")
+function timetableWindowFuncs.duplicateTimetable(guiState, duplicateCombobox)
+  local index = duplicateCombobox:getCurrentIndex()
+  if index == -1 then
+    return -- Don't apply anything!
+  end
+
+  -- Get the currently selected line that we are making a timetable for.
+  local lineId = guiState.timetableWindow.lineTableList[
+      guiState.timetableWindow.lineTable:getSelected()[1] + 1][1]
+  if not guiState.timetables.slots or
+      not guiState.timetables.slots[lineId] then
+    -- If there are no slots for this line, well, nothing to do.
     return
   end
 
-  local index = guiState.timetableWindow.lineTable:getSelected()[1]
-  print("index", tostring(index))
-  print("size of list", tostring(#guiState.timetableWindow.lineTableList))
-  local lineId = guiState.timetableWindow.lineTableList[
-      guiState.timetableWindow.lineTable:getSelected()[1] + 1][1]
-  print("lineId", tostring(lineId))
-  print("slots", tostring(guiState.timetables.slots))
-  if guiState.timetables.slots and guiState.timetables.slots[lineId] then
-    print("there is already something")
-    guiState.timetables.slots[lineId] = guiState.timetables.slots[lineId] + 1
-    print("incremented to ", guiState.timetables.slots[lineId])
-  else
-    print("we have nothing yet")
-    guiState.timetables.slots[lineId] = 1
-    print("incremented to ", guiState.timetables.slots[lineId])
+  if guiState.timetables.slots[lineId] > 1 then
+    -- Delete all the other slots and their timetables.
+    j = 2
+    while j <= guiState.timetables.slots[lineId] do
+      if guiState.timetables.timetable[lineId][j] then
+        guiState.timetables.timetable[lineId][j] = nil
+      end
+      j = j + 1
+    end
   end
+
+  local sep = timetableWindowFuncs.separationList[index + 1]
+  local sepMins = math.floor(sep)
+  local sepSecs = (sep - sepMins) * 60
+  local numSlots = math.floor(60 / sep)
+
+  guiState.timetables.slots[lineId] = numSlots
+  j = 2
+  while j <= numSlots do
+    guiState.timetables.timetable[lineId][j] = {}
+    for s, t in pairs(guiState.timetables.timetable[lineId][1]) do
+      guiState.timetables.timetable[lineId][j][s] = t
+    end
+    -- Modify the time by adding the right increment.
+    k = 1
+    -- Get the total number of stations.
+    while k < #lineUtils.getStationIds(lineId) do
+      if guiState.timetables.timetable[lineId][1][k] then
+        local startMin = guiState.timetables.timetable[lineId][1][k][1]
+        local startSec = guiState.timetables.timetable[lineId][1][k][2]
+
+        local newMins = (startMin + (j - 1) * sepMins +
+            math.floor((startSec + (j - 1) * sepSecs) / 60)) % 60
+        local newSecs = (startSec + ((j - 1) * sepSecs)) % 60
+
+        guiState.timetables.timetable[lineId][j][k] = { newMins, newSecs }
+      end
+      k = k + 1
+    end
+    j = j + 1
+  end
+
+  -- TODO: send update message to engine thread
+  table.insert(guiState.callbacks, function()
+      api.cmd.sendCommand(api.cmd.make.sendScriptEvent(
+          "strict_timetables.lua",
+          "timetable_update",
+          "set_timetable",
+          {
+            line = lineId,
+            timetable = guiState.timetables.timetable[lineId]
+          })) end)
+  guiState.timetableWindow.stationTableRowsChanged = true
 end
 
 -- Initialize the window: create all the tabs and other structure that will be
@@ -561,9 +721,7 @@ function timetableWindowFuncs.initWindow(guiState)
   stationDuplicateTable:setGravity(0.0, 0.0)
   local stationDuplicateText = api.gui.comp.TextView.new(_("duplicate_text"))
   local stationDuplicateCombobox = api.gui.comp.ComboBox.new()
-  local separationList = {30, 20, 15, 12, 10, 7.5, 6, 5, 4, 3, 2.5, 2, 1.5, 1.2,
-      1}
-  for k, v in ipairs(separationList) do
+  for k, v in ipairs(timetableWindowFuncs.separationList) do
     stationDuplicateCombobox:addItem(v .. " min (" .. 60 / v .. "/h)")
   end
   stationDuplicateCombobox:setGravity(1.0, 0.0)
@@ -572,7 +730,10 @@ function timetableWindowFuncs.initWindow(guiState)
   local stationDuplicateApply = api.gui.comp.Button.new(
       stationDuplicateApplyLabel, true)
   stationDuplicateApply:setGravity(1.0, 0.0)
-  -- TODO: onClick()
+  stationDuplicateApply:onClick(function()
+      timetableWindowFuncs.duplicateTimetable(guiState,
+          stationDuplicateCombobox)
+  end)
   stationDuplicateTable:addRow({ stationDuplicateText, stationDuplicateCombobox,
       stationDuplicateApply })
   stationDuplicateTable:setVisible(false, false)

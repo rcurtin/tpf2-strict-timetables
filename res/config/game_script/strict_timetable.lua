@@ -6,8 +6,6 @@ local engineState = {
   -- should not make any modifications.
   timetables = {
     hasTimetable = {}, -- Lookup table mapping bools to internal line IDs.
-    lineStationHasTimetable = {}, -- Lookup table mapping (line ID, station ID)
-                                  -- to whether it is timetabled.
     timetable = {},
     slots = {}
   }
@@ -25,8 +23,6 @@ local guiState = {
   timetableWindow = {
     -- The handle to the main window.
     handle = nil,
-    -- The last known size of the main window.
-    size = nil,
     -- The table object used to list the lines.
     lineTable = nil,
     -- The list of line names in the line table.
@@ -56,8 +52,6 @@ local guiState = {
   -- Timetable information for each line.
   timetables = {
     hasTimetable = {}, -- Lookup table mapping internal line IDs to bools.
-    lineStationHasTimetable = {}, -- Lookup table mapping (line ID, station ID)
-                                  -- to whether it is timetabled.
     timetable = {},
     slots = {} -- Mapping from line ID to the number of slots for that line.
   },
@@ -98,6 +92,26 @@ function data()
 
         if not engineState.timetables.timetable then
           engineState.timetables.timetable = {}
+        end
+
+        print(" - Loaded slots size: " .. tostring(#engineState.timetables.slots))
+
+        -- Ensure that there are empty timeslots for each line.
+        for i, v in pairs(engineState.timetables.slots) do
+          print(" - Slots for line " .. tostring(i) .. ": " .. tostring(v))
+          if not engineState.timetables.timetable[i] then
+            engineState.timetables.timetable[i] = {}
+          end
+
+          if v ~= #engineState.timetables.timetable[i] then
+            -- Reset to the correct value.
+            engineState.timetables.timetable[i] = {}
+            local j = 1
+            while j <= v do
+              table.insert(engineState.timetables.timetable[i], {})
+              j = j + 1
+            end
+          end
         end
       end
 
@@ -176,7 +190,6 @@ function data()
 
       -- Call any callbacks that are needed from the update.
       for k, v in pairs(guiState.callbacks) do
-          print("Going to do a callback!")
           v()
       end
       guiState.callbacks = {}
@@ -191,7 +204,81 @@ function data()
 
       if id == "timetable_update" then
         if name == "toggle_timetable" then
+          print("Engine: toggle timetable for line " ..
+              tostring(param.line) .. ": " .. tostring(param.value) .. ".")
           engineState.timetables.hasTimetable[param.line] = param.value
+          print("Engine: toggle complete.")
+
+        elseif name == "add_timeslot" then
+          if not engineState.timetables.slots[param.line] then
+            engineState.timetables.slots[param.line] = 1
+          else
+            engineState.timetables.slots[param.line] =
+                engineState.timetables.slots[param.line] + 1
+          end
+
+          local slotId = engineState.timetables.slots[param.line]
+          if not engineState.timetables.timetable[param.line] then
+            engineState.timetables.timetable[param.line] = {}
+          end
+          if not engineState.timetables.timetable[param.line][slotId] then
+            engineState.timetables.timetable[param.line][slotId] = {}
+          end
+          print("Engine: set number of slots for line " ..
+              tostring(param.line) ..  " to " ..
+              tostring(engineState.timetables.slots[param.line]) ..  ".")
+
+        elseif name == "remove_timeslot" then
+          if not engineState.timetables.slots[param.line] then
+            return -- Invalid message...?
+          end
+
+          if engineState.timetables.slots[param.line] and
+              engineState.timetables.slots[param.line] > 1 then
+            engineState.timetables.slots[param.line] =
+                engineState.timetables.slots[param.line] - 1
+          else
+            engineState.timetables.slots[param.line] = nil
+          end
+
+          if param.slot < #engineState.timetables.timetable[param.line] then
+            table.remove(engineState.timetables.timetable[param.line], param.slot)
+          end
+          print("Engine: remove slot " .. tostring(param.slot) .. " from " ..
+              "timetables for line " .. tostring(param.line) .. ".")
+
+        elseif name == "update_time" then
+          if not engineState.timetables.timetable[param.line] then
+            engineState.timetables.timetable[param.line] = {}
+          end
+
+          if not engineState.timetables.timetable[param.line][param.slot] then
+            engineState.timetables.timetable[param.line][param.slot] = {}
+          end
+
+          engineState.timetables.timetable[param.line][param.slot][param.stop] =
+              { param.mins, param.secs }
+          print("Engine: set slot " .. tostring(param.slot) .. " stop " ..
+              tostring(param.stop) .. " on line " .. tostring(param.line) ..
+              " to " .. tostring(param.mins) .. "m" .. tostring(param.secs) ..
+              "s.")
+
+        elseif name == "remove_time" then
+          if not engineState.timetables.timetable[param.line] then
+            return
+          elseif not engineState.timetables.timetable[
+              param.line][param.slot] then
+            return
+          else
+            engineState.timetables.timetable[
+                param.line][param.slot][param.stop] = nil
+          end
+          print("Engine: remove slot " .. tostring(param.slot) .. " stop " ..
+              tostring(param.stop) .. " on " .. tostring(param.line) .. ".")
+
+        elseif name == "set_timetable" then
+          engineState.timetables.timetable[param.line] = param.timetable
+          print("Engine: set timetable for line " .. tostring(param.line) .. ".")
         end
       end
     end,
