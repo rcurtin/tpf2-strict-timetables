@@ -8,6 +8,7 @@ function data()
       ["lines"] = "Lines",
       ["filter:"] = "Filter:",
       ["none"] = "None",
+      ["debug_tooltip"] = "Debug mode: when enabled, print timetables to stdout every time they change.",
       ["unassigned vehicles:"] = "Unassigned vehicles:",
       -- used in the unassigned vehicle dialog; note the spacing
       ["stopped"] = "stopped",

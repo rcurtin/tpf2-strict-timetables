@@ -3,7 +3,8 @@ local clockFuncs = {}
 
 -- Initialize the clock to 00:00.
 function clockFuncs.initClock()
-  local time = api.engine.getComponent(api.engine.util.getWorld(), api.type.ComponentType.GAME_TIME).gameTime
+  local time = api.engine.getComponent(api.engine.util.getWorld(),
+      api.type.ComponentType.GAME_TIME).gameTime
   if time == nil then
     time = 0
   end
@@ -19,7 +20,8 @@ end
 -- one-second boundaries!  It is instead called by every game engine update tick
 -- (this appears to be every 200ms).
 function clockFuncs.updateClock(clock)
-  local time = api.engine.getComponent(api.engine.util.getWorld(), api.type.ComponentType.GAME_TIME).gameTime
+  local time = api.engine.getComponent(api.engine.util.getWorld(),
+      api.type.ComponentType.GAME_TIME).gameTime
   if time and clock then
     local totalSecs = math.floor((time - clock.refTime) / 1000)
     local totalMins = math.floor(totalSecs / 60)
@@ -47,7 +49,8 @@ end
 -- Given the current state of a clock, return the time as a string to be
 -- printed.
 function clockFuncs.printClock(clock)
-  local t = { clockFuncs.formatTime(clock.min), ":", clockFuncs.formatTime(clock.sec) }
+  local t = { clockFuncs.formatTime(clock.min), ":",
+      clockFuncs.formatTime(clock.sec) }
   return table.concat(t, "")
 end
 

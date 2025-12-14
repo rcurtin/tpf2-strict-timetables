@@ -150,7 +150,7 @@ function timetableWindowFuncs.addTimeslot(guiState)
   if guiState.timetables.timetable[lineId] then
     table.insert(guiState.timetables.timetable[lineId], {})
   else
-    guiState.timetables.timetable[lineId] = {}
+    guiState.timetables.timetable[lineId] = {{}}
   end
 
   -- Enqueue a message to be sent on callback.  If there already is one, then
@@ -743,6 +743,14 @@ function timetableWindowFuncs.initWindow(guiState)
   windowLayout:addItem(stationWrapper)
   windowWrapper:setLayout(windowLayout)
 
+  local debugText = api.gui.comp.TextView.new("D")
+  debugText:setTooltip(_("debug_tooltip"))
+  local debugButton = api.gui.comp.ToggleButton.new(debugText)
+  debugButton:onToggle(function()
+    -- Enqueue a callback for the engine to turn on debug mode.
+    api.cmd.sendCommand(api.cmd.make.sendScriptEvent(
+        "strict_timetables.lua", "toggle_debug", "", {})) end)
+
   local window = api.gui.comp.Window.new(_("timetables"), windowWrapper)
   window:addHideOnCloseHandler()
   window:setMovable(true)
@@ -750,6 +758,8 @@ function timetableWindowFuncs.initWindow(guiState)
   window:setResizable(true)
   window:setSize(api.gui.util.Size.new(1202, 802))
   window:setPosition(200, 200)
+  -- Insert debug button just before the pin.
+  window:getLayout():getItem(0):getLayout():insertItem(debugButton, 6)
   window:setVisible(false, false)
   guiState.timetableWindow.handle = window
   guiState.timetableWindow.handle:onVisibilityChange(function()

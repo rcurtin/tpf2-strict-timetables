@@ -1,5 +1,6 @@
 local clockFuncs = require "strict_timetables/clock_funcs"
 local timetableWindowFuncs = require "strict_timetables/timetable_window_funcs"
+local debugUtils = require "strict_timetables/debug_utils"
 
 local engineState = {
   -- Timetable information.  This is meant to be read only!  The engine thread
@@ -7,7 +8,10 @@ local engineState = {
   timetables = {
     enabled = {}, -- If enabled[lineId] is true, then the timetable is enabled.
     timetable = {}
-  }
+  },
+  -- Whether debugging output is enabled.  Prints the timetable to the log after
+  -- every update.
+  debug = false
 }
 
 -- The clock is controlled by the engine thread.
@@ -92,7 +96,13 @@ function data()
           engineState.timetables.enabled = {}
         end
 
-        print(" - Loaded timetable size: " .. tostring(#engineState.timetables.timetable))
+        -- Initialize variable in case it wasn't saved in the last save.
+        if engineState.debug == nil then
+          engineState.debug = false
+        end
+
+        print(" - Loaded timetable size: " ..
+            tostring(#engineState.timetables.timetable))
       end
 
       -- Update clock state if it was serialized.
@@ -198,7 +208,7 @@ function data()
 
         elseif name == "add_timeslot" then
           if not engineState.timetables.timetable[param.line] then
-            engineState.timetables.timetable[param.line] = {}
+            engineState.timetables.timetable[param.line] = {{}}
           else
             table.insert(engineState.timetables.timetable[param.line], {})
           end
@@ -255,6 +265,19 @@ function data()
           engineState.timetables.timetable[param.line] = param.timetable
           print("Engine: set timetable for line " .. tostring(param.line) .. ".")
         end
+
+      elseif id == "toggle_debug" then
+        if engineState.debug then
+          print("Engine: toggle debug mode off.")
+          engineState.debug = false
+        else
+          print("Engine: toggle debug mode on.")
+          engineState.debug = true
+        end
+      end
+
+      if engineState.debug then
+        debugUtils.printTimetables(engineState.timetables)
       end
     end,
 
