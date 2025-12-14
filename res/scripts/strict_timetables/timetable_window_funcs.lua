@@ -31,13 +31,13 @@ function timetableWindowFuncs.refreshLines(guiState)
   for k, l in pairs(api.engine.system.lineSystem.getLines()) do
     local lineName = lineUtils.getName(l)
     local lineType = lineUtils.getType(l)
-    local hasTimetable = (guiState.timetables.hasTimetable[l] ~= nil)
+    local enabled = lineUtils.hasEnabledTimetable(l, guiState.timetables)
 
     -- Check the filters to see if we can add the line.
     if noFilters or (lineType >= 0 and
        guiState.timetableWindow.filters[lineType + 1]:isSelected()) then
       -- TODO: actually return some kind of color code here
-      table.insert(newLines, { l, "●", lineName, hasTimetable })
+      table.insert(newLines, { l, "●", lineName, enabled })
     end
   end
 
@@ -67,11 +67,11 @@ function timetableWindowFuncs.refreshLines(guiState)
       local button = api.gui.comp.Button.new(buttonImage, true)
       button:setGravity(1, 0.5)
       button:onClick(function()
-        if guiState.timetables.hasTimetable[lineData[1]] then
-          guiState.timetables.hasTimetable[lineData[1]] = nil
+        if lineUtils.hasEnabledTimetable(lineData[1], guiState.timetables) then
+          guiState.timetables.enabled[lineData[1]] = nil
           buttonImage:setImage("ui/checkbox0.tga", false)
         else
-          guiState.timetables.hasTimetable[lineData[1]] = true
+          guiState.timetables.enabled[lineData[1]] = true
           buttonImage:setImage("ui/checkbox1.tga", false)
         end
         -- Send a message to the engine state indicating that this line has been
@@ -83,7 +83,8 @@ function timetableWindowFuncs.refreshLines(guiState)
                 "toggle_timetable",
                 {
                   line = lineData[1],
-                  value = guiState.timetables.hasTimetable[lineData[1]]
+                  value = lineUtils.hasEnabledTimetable(lineData[1],
+                      guiState.timetables)
                 })) end)
       end)
 
@@ -146,10 +147,10 @@ function timetableWindowFuncs.addTimeslot(guiState)
   local index = guiState.timetableWindow.lineTable:getSelected()[1]
   local lineId = guiState.timetableWindow.lineTableList[
       guiState.timetableWindow.lineTable:getSelected()[1] + 1][1]
-  if guiState.timetables.slots and guiState.timetables.slots[lineId] then
-    guiState.timetables.slots[lineId] = guiState.timetables.slots[lineId] + 1
+  if guiState.timetables.timetable[lineId] then
+    table.insert(guiState.timetables.timetable[lineId], {})
   else
-    guiState.timetables.slots[lineId] = 1
+    guiState.timetables.timetable[lineId] = {}
   end
 
   -- Enqueue a message to be sent on callback.  If there already is one, then
@@ -172,17 +173,10 @@ function timetableWindowFuncs.removeTimeslot(guiState, slotId)
   local index = guiState.timetableWindow.lineTable:getSelected()[1]
   local lineId = guiState.timetableWindow.lineTableList[
       guiState.timetableWindow.lineTable:getSelected()[1] + 1][1]
-  if guiState.timetables.slots and guiState.timetables.slots[lineId] then
-    if guiState.timetables.slots[lineId] > 1 then
-      guiState.timetables.slots[lineId] = guiState.timetables.slots[lineId] - 1
-    else
-      guiState.timetables.slots[lineId] = nil
-    end
-  end
 
-  -- Now remove it from the actual timetables.
-  if guiState.timetables.timetable and guiState.timetables.timetable[lineId] and
-      slotId <= #guiState.timetables.timetable[lineId] then
+  -- Remove it from the actual timetables.
+  if guiState.timetables.timetable[lineId] and
+      slotId <= lineUtils.getNumTimetableSlots(lineId, guiState.timetables) then
     -- Remove the entire slot, shifting all later slots left.
     table.remove(guiState.timetables.timetable[lineId], slotId)
   end
@@ -445,14 +439,11 @@ function timetableWindowFuncs.refreshStationTable(guiState, index)
                     nameLabel,
                     api.gui.comp.TextView.new("") }
       -- Add any actual timetable times that we have.
-      if guiState.timetables.slots[lineId] then
-        local j = 1
-        while j <= guiState.timetables.slots[lineId] do
-          if guiState.timetables.timetable[lineId] and
-              guiState.timetables.timetable[lineId][j] ~= nil and
-              guiState.timetables.timetable[lineId][j][i] ~= nil then
-            local mins = guiState.timetables.timetable[lineId][j][i][1]
-            local secs = guiState.timetables.timetable[lineId][j][i][2]
+      if lineUtils.getNumTimetableSlots(lineId, guiState.timetables) > 0 then
+        for j, t in pairs(guiState.timetables.timetable[lineId]) do
+          if t[i] ~= nil then
+            local mins = t[i][1]
+            local secs = t[i][2]
 
             local minStr = tostring(mins)
             if mins < 10 then
@@ -528,8 +519,6 @@ function timetableWindowFuncs.refreshStationTable(guiState, index)
             end)
             table.insert(row, addButton)
           end
-
-          j = j + 1
         end
       end
 
@@ -563,21 +552,15 @@ function timetableWindowFuncs.duplicateTimetable(guiState, duplicateCombobox)
   -- Get the currently selected line that we are making a timetable for.
   local lineId = guiState.timetableWindow.lineTableList[
       guiState.timetableWindow.lineTable:getSelected()[1] + 1][1]
-  if not guiState.timetables.slots or
-      not guiState.timetables.slots[lineId] then
+  local numTimetables = lineUtils.getNumTimetableSlots(lineId,
+      guiState.timetables)
+  if numTimetables == 0 then
     -- If there are no slots for this line, well, nothing to do.
     return
-  end
-
-  if guiState.timetables.slots[lineId] > 1 then
+  elseif numTimetables > 1 then
     -- Delete all the other slots and their timetables.
-    j = 2
-    while j <= guiState.timetables.slots[lineId] do
-      if guiState.timetables.timetable[lineId][j] then
-        guiState.timetables.timetable[lineId][j] = nil
-      end
-      j = j + 1
-    end
+    guiState.timetables.timetable[lineId] = {
+        guiState.timetables.timetable[lineId][1] }
   end
 
   local sep = timetableWindowFuncs.separationList[index + 1]
@@ -585,7 +568,6 @@ function timetableWindowFuncs.duplicateTimetable(guiState, duplicateCombobox)
   local sepSecs = (sep - sepMins) * 60
   local numSlots = math.floor(60 / sep)
 
-  guiState.timetables.slots[lineId] = numSlots
   j = 2
   while j <= numSlots do
     guiState.timetables.timetable[lineId][j] = {}
@@ -770,17 +752,18 @@ function timetableWindowFuncs.initWindow(guiState)
   window:setPosition(200, 200)
   window:setVisible(false, false)
   guiState.timetableWindow.handle = window
+  guiState.timetableWindow.handle:onVisibilityChange(function()
+      if guiState.timetableWindow.handle:isVisible() then
+        timetableWindowFuncs.refreshLines(guiState)
+        if guiState.timetableWindow.stationTable:isVisible() and
+            #guiState.timetableWindow.lineTable:getSelected() == 1 then
+          timetableWindowFuncs.refreshStationTable(guiState,
+              guiState.timetableWindow.lineTable:getSelected()[1] + 1)
+        end
+      end
+  end)
 
   return
-end
-
--- Open the window.
-function timetableWindowFuncs.showWindow(window)
-  if not window then
-    print("Attempted to show window but it was nil!")
-  else
-    window:setVisible(true, true)
-  end
 end
 
 -- Create the button on the main GUI (to the right of the clock) that a user can
@@ -798,10 +781,11 @@ function timetableWindowFuncs.initButton(guiState)
   gameInfoLayout:addItem(line)
   game.gui.boxLayout_addItem("gameInfo.layout", button.id)
   button:onClick(function ()
-    local status, err = pcall(timetableWindowFuncs.showWindow,
-        guiState.timetableWindow.handle)
-    if not status then
-      print(err)
+    -- We assume the window has been initialized.
+    if guiState.timetableWindow.handle:isVisible() then
+      guiState.timetableWindow.handle:setVisible(false, false)
+    else
+      guiState.timetableWindow.handle:setVisible(true, true)
     end
   end)
 

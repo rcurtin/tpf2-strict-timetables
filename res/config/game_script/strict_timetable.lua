@@ -5,9 +5,8 @@ local engineState = {
   -- Timetable information.  This is meant to be read only!  The engine thread
   -- should not make any modifications.
   timetables = {
-    hasTimetable = {}, -- Lookup table mapping bools to internal line IDs.
-    timetable = {},
-    slots = {}
+    enabled = {}, -- If enabled[lineId] is true, then the timetable is enabled.
+    timetable = {}
   }
 }
 
@@ -51,9 +50,8 @@ local guiState = {
   },
   -- Timetable information for each line.
   timetables = {
-    hasTimetable = {}, -- Lookup table mapping internal line IDs to bools.
-    timetable = {},
-    slots = {} -- Mapping from line ID to the number of slots for that line.
+    enabled = {}, -- If enabled[lineId] is true, then the timetable is enabled.
+    timetable = {}
   },
   -- Whether or not the timetable window should always
   -- be refreshed when shown.
@@ -85,34 +83,16 @@ function data()
       if not clock and loadedState and loadedState.timetables then
         print("Loading saved timetable!")
         engineState.timetables = loadedState.timetables
-        -- TODO: just for debugging...
-        if not engineState.timetables.slots then
-          engineState.timetables.slots = {}
-        end
 
         if not engineState.timetables.timetable then
           engineState.timetables.timetable = {}
         end
 
-        print(" - Loaded slots size: " .. tostring(#engineState.timetables.slots))
-
-        -- Ensure that there are empty timeslots for each line.
-        for i, v in pairs(engineState.timetables.slots) do
-          print(" - Slots for line " .. tostring(i) .. ": " .. tostring(v))
-          if not engineState.timetables.timetable[i] then
-            engineState.timetables.timetable[i] = {}
-          end
-
-          if v ~= #engineState.timetables.timetable[i] then
-            -- Reset to the correct value.
-            engineState.timetables.timetable[i] = {}
-            local j = 1
-            while j <= v do
-              table.insert(engineState.timetables.timetable[i], {})
-              j = j + 1
-            end
-          end
+        if not engineState.timetables.enabled then
+          engineState.timetables.enabled = {}
         end
+
+        print(" - Loaded timetable size: " .. tostring(#engineState.timetables.timetable))
       end
 
       -- Update clock state if it was serialized.
@@ -136,6 +116,9 @@ function data()
         print("No engine state!!")
       else
         guiState.timetables = engineState.timetables
+        if not guiState.timetables.timetable then
+          guiState.timetables.timetable = {}
+        end
       end
     end,
 
@@ -206,44 +189,36 @@ function data()
         if name == "toggle_timetable" then
           print("Engine: toggle timetable for line " ..
               tostring(param.line) .. ": " .. tostring(param.value) .. ".")
-          engineState.timetables.hasTimetable[param.line] = param.value
+          if param.value == true then
+            engineState.timetables.enabled[param.line] = param.value
+          else
+            engineState.timetables.enabled[param.line] = nil -- Remove when false.
+          end
           print("Engine: toggle complete.")
 
         elseif name == "add_timeslot" then
-          if not engineState.timetables.slots[param.line] then
-            engineState.timetables.slots[param.line] = 1
-          else
-            engineState.timetables.slots[param.line] =
-                engineState.timetables.slots[param.line] + 1
-          end
-
-          local slotId = engineState.timetables.slots[param.line]
           if not engineState.timetables.timetable[param.line] then
             engineState.timetables.timetable[param.line] = {}
+          else
+            table.insert(engineState.timetables.timetable[param.line], {})
           end
-          if not engineState.timetables.timetable[param.line][slotId] then
-            engineState.timetables.timetable[param.line][slotId] = {}
-          end
-          print("Engine: set number of slots for line " ..
+
+          print("Engine: set number of timetable slots for line " ..
               tostring(param.line) ..  " to " ..
-              tostring(engineState.timetables.slots[param.line]) ..  ".")
+              tostring(lineUtils.getNumTimetableSlots(param.line,
+                  engineState.timetables)) .. ".")
 
         elseif name == "remove_timeslot" then
-          if not engineState.timetables.slots[param.line] then
+          if not engineState.timetables.timetable[param.line] then
             return -- Invalid message...?
           end
 
-          if engineState.timetables.slots[param.line] and
-              engineState.timetables.slots[param.line] > 1 then
-            engineState.timetables.slots[param.line] =
-                engineState.timetables.slots[param.line] - 1
-          else
-            engineState.timetables.slots[param.line] = nil
+          if param.slot <= lineUtils.getNumTimetableSlots(param.line,
+              engineState.timetables) then
+            table.remove(engineState.timetables.timetable[param.line],
+                param.slot)
           end
 
-          if param.slot < #engineState.timetables.timetable[param.line] then
-            table.remove(engineState.timetables.timetable[param.line], param.slot)
-          end
           print("Engine: remove slot " .. tostring(param.slot) .. " from " ..
               "timetables for line " .. tostring(param.line) .. ".")
 

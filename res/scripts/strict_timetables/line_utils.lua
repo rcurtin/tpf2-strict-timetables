@@ -70,19 +70,29 @@ function lineUtils.getStationGroupIds(line)
   return stationGroupIds
 end
 
--- Return the number of timetable slots that a line has.
+--- Return the number of timetable slots that a line has.
 function lineUtils.getNumTimetableSlots(line, timetables)
-  if timetables and timetables.slots and timetables.slots[line] then
-    return timetables.slots[line]
+  if not timetables.timetable[line] then
+    timetables.timetable[line] = {}
+  end
+  return #timetables.timetable[line]
+end
+
+--- Return whether or not a line has an enabled timetable.
+function lineUtils.hasEnabledTimetable(line, timetables)
+  if not timetables.enabled[line] then
+    return false
   else
-    return 0
+    return timetables.enabled[line]
   end
 end
 
 return lineUtils
 
 -- Next thoughts:
---    * implement button to duplicate the first timetable every N minutes
+--    * add debug function to print timetable
+--    * add button to UI to enable debug mode
+--    * make clicking Timetable button in main UI toggle window visibility
 --    * augment color codes onto the line table
 --
 -- Later:
