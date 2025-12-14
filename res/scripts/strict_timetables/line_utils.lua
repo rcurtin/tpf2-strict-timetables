@@ -90,9 +90,7 @@ end
 return lineUtils
 
 -- Next thoughts:
---    * add debug function to print timetable
---    * add button to UI to enable debug mode
---    * make clicking Timetable button in main UI toggle window visibility
+--    * actually implement timetabling when it's enabled
 --    * augment color codes onto the line table
 --
 -- Later:
