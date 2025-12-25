@@ -7,6 +7,7 @@ local miscUtils = require "strict_timetables/misc_utils"
 local vehicleUtils = require "strict_timetables/vehicle_utils"
 local lineUtils = require "strict_timetables/line_utils"
 local stationUtils = require "strict_timetables/station_utils"
+local clockFuncs = require "strict_timetables/clock_funcs"
 
 timetableWindowFuncs = {}
 
@@ -588,8 +589,37 @@ function timetableWindowFuncs.refreshStationTable(guiState, index)
       a:getLayout():getItem(0):onClick(function()
           api.gui.util.getGameUI():getViewManager():openWindow(av, true, 0)
       end)
-      a:getLayout():getItem(0):setTooltip(vehicleUtils.getName(av) .. " (" ..
-          vehicleUtils.getStatus(av) .. ")")
+
+      local tooltipStr = vehicleUtils.getName(av) .. " (" ..
+          vehicleUtils.getStatus(av) .. "): stop " ..
+          tostring(guiState.timetables.vehicles[av].stopIndex + 1) ..
+          " of " .. tostring(#guiState.timetableWindow.stationTableRows)
+      if not guiState.timetables.vehicles[av].late then
+        tooltipStr = tooltipStr .. "."
+      else
+        tooltipStr = tooltipStr .. "; last departure was " ..
+            tostring(guiState.timetables.vehicles[av].late.mins) .. "m" ..
+            tostring(guiState.timetables.vehicles[av].late.secs) .. "s late."
+      end
+
+      if not guiState.timetables.vehicles[av].released then
+        local stopIndex = guiState.timetables.vehicles[av].stopIndex + 1
+        local depTarget = nil
+        if guiState.timetables.timetable[lineId][slot][stopIndex] then
+          depTarget = {
+              min = guiState.timetables.timetable[lineId][slot][stopIndex][1],
+              sec = guiState.timetables.timetable[lineId][slot][stopIndex][2] }
+        end
+
+        if depTarget then
+          tooltipStr = tooltipStr .. "  Waiting to depart at " ..
+              clockFuncs.printClock(depTarget) .. "."
+        else
+          tooltipStr = tooltipStr .. "  Departing after loading/unloading."
+        end
+      end
+
+      a:getLayout():getItem(0):setTooltip(tooltipStr)
     else
       -- Nothing is assigned to this timeslot, so remove any children of the
       -- wrapper.
@@ -650,7 +680,7 @@ function timetableWindowFuncs.duplicateTimetable(guiState, duplicateCombobox)
     j = j + 1
   end
 
-  -- TODO: send update message to engine thread
+  -- Send update message to engine thread.
   table.insert(guiState.callbacks, function()
       api.cmd.sendCommand(api.cmd.make.sendScriptEvent(
           "strict_timetables.lua",

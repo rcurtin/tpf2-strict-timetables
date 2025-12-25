@@ -103,17 +103,17 @@ function timetableFuncs.releaseIfNeeded(timetables, clock, line, vehicle,
     -- If a vehicle is more than 30 minutes late, we actually consider it 30
     -- minutes early!
     if d.mins == 0 and d.secs == 0 then
+      -- On time: force the vehicle to depart.
       if debug then
         print("Engine: vehicle " .. tostring(vehicle) .. " on line " ..
             tostring(line) .. " slot " ..
             tostring(timetables.vehicles[vehicle].slot) ..
             " released on-time at " .. clockFuncs.printClock(depTarget) .. ".")
       end
-      -- We are either right on time or up to 30 minutes late; so, force the
-      -- vehicle to depart.
       api.cmd.sendCommand(api.cmd.make.setVehicleShouldDepart(vehicle))
       timetables.vehicles[vehicle].assigned = false
       timetables.vehicles[vehicle].released = true
+      timetables.vehicles[vehicle].late = nil
     elseif d.mins >= 30 and not onTimeOnly then
       -- Here we don't force the train to leave unless it is still loading or
       -- unloading.  If the stop is a full load any/all, or has a minimum stop
@@ -131,9 +131,9 @@ function timetableFuncs.releaseIfNeeded(timetables, clock, line, vehicle,
         local waitingSecs = currGameTime -
             math.floor(vehicleInfo.doorsTime / 1000000)
         if waitingSecs >= 10 then
+          local lateTime = clockFuncs.timeDiff({ min = d.mins, sec = d.secs },
+              { min = 0, sec = 0 })
           if debug then
-            local lateTime = clockFuncs.timeDiff({ min = d.mins, sec = d.secs },
-                { min = 0, sec = 0 })
             print("Engine: vehicle " .. tostring(vehicle) .. " on line " ..
                 tostring(line) .. " slot " ..
                 tostring(timetables.vehicles[vehicle].slot) ..
@@ -142,14 +142,15 @@ function timetableFuncs.releaseIfNeeded(timetables, clock, line, vehicle,
           end
           api.cmd.sendCommand(api.cmd.make.setVehicleShouldDepart(vehicle))
           timetables.vehicles[vehicle].released = true
+          timetables.vehicles[vehicle].late = lateTime
         end
       else
         -- The stop is not a full load of any sort, and doesn't have a minimum
         -- waiting time, so we can just depend on the game to finish
         -- loading/unloading then send the vehicle on its way.
+        local lateTime = clockFuncs.timeDiff({ min = d.mins, sec = d.secs },
+            { min = 0, sec = 0 })
         if debug then
-          local lateTime = clockFuncs.timeDiff({ min = d.mins, sec = d.secs },
-              { min = 0, sec = 0 })
           print("Engine: vehicle " .. tostring(vehicle) .. " on line " ..
               tostring(line) .. " slot " ..
               tostring(timetables.vehicles[vehicle].slot) ..
@@ -159,6 +160,7 @@ function timetableFuncs.releaseIfNeeded(timetables, clock, line, vehicle,
         api.cmd.sendCommand(api.cmd.make.setVehicleManualDeparture(vehicle,
             false))
         timetables.vehicles[vehicle].released = true
+        timetables.vehicles[vehicle].late = lateTime
       end
       timetables.vehicles[vehicle].assigned = false
     end

@@ -354,6 +354,4 @@ end
 
 -- Features to implement:
 --  * notifications when a vehicle departs late?
---  * better tooltips indicating if something was late
---  * fix duplicate log messages for a released vehicle
 --  * allow configurable maximum lateness for a line
