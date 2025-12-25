@@ -620,6 +620,13 @@ function timetableWindowFuncs.refreshStationTable(guiState, index)
       end
 
       a:getLayout():getItem(0):setTooltip(tooltipStr)
+
+      -- Tint the background of the icon, if we are late.
+      if guiState.timetables.vehicles[av].late then
+        a:setName("Vehicle::Late")
+      else
+        a:setName("Vehicle::OnTime")
+      end
     else
       -- Nothing is assigned to this timeslot, so remove any children of the
       -- wrapper.

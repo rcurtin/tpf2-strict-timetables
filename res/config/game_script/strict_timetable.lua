@@ -353,5 +353,7 @@ function data()
 end
 
 -- Features to implement:
---  * notifications when a vehicle departs late?
 --  * allow configurable maximum lateness for a line
+--  * documentation
+--  * fix for UI scaling changes
+--  * finalize debugging output strings
