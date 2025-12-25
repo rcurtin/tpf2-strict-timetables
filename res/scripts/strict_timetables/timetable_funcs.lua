@@ -46,8 +46,14 @@ function timetableFuncs.tryAssignSlot(timetables, clock, line, vehicle)
     slot = slot + 1
   end
 
+  -- Yield whatever the old timeslot is.
+  if timetables.vehicles[vehicle] then
+    if timetables.slotAssignments[line][timetables.vehicles[vehicle].slot] then
+      timetables.slotAssignments[line][timetables.vehicles[vehicle].slot] = nil
+    end
+  end
+
   if bestSlot ~= 0 then
-    print("best slot: " .. tostring(bestSlot))
     -- Assign this vehicle to that slot.
     if not timetables.slotAssignments[line] then
       timetables.slotAssignments[line] = {}
@@ -76,7 +82,6 @@ function timetableFuncs.releaseIfNeeded(timetables, clock, line, vehicle,
   end
 
   if depTarget ~= nil then
-    print("departure target: " .. clockFuncs.printClock(depTarget))
     -- Disable automatic departure, if it's enabled.
     if vehicleInfo.autoDeparture then
       api.cmd.sendCommand(

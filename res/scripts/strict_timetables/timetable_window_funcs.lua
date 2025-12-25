@@ -314,11 +314,14 @@ function timetableWindowFuncs.refreshStationTable(guiState, index)
       api.engine.system.transportVehicleSystem.getLine2VehicleMap()
   if lineVehiclesMap and lineVehiclesMap[lineId] then
     for i, vehicle in pairs(lineVehiclesMap[lineId]) do
-      table.insert(newUnassignedVehicles, {
-          vehicle,
-          vehicleUtils.getName(vehicle),
-          vehicleUtils.getIcon(vehicle),
-          vehicleUtils.getStatus(vehicle) })
+      if (not guiState.timetables.vehicles[vehicle]) or
+          (guiState.timetables.vehicles[vehicle].slot == 0) then
+        table.insert(newUnassignedVehicles, {
+            vehicle,
+            vehicleUtils.getName(vehicle),
+            vehicleUtils.getIcon(vehicle),
+            vehicleUtils.getStatus(vehicle) })
+      end
     end
   end
 
@@ -385,29 +388,45 @@ function timetableWindowFuncs.refreshStationTable(guiState, index)
       i = i + 1
     end
 
+    local assignedVehicleWrappers = {}
     local emptyViews = {
         api.gui.comp.TextView.new(""),
         api.gui.comp.TextView.new(""),
         api.gui.comp.TextView.new("")
     }
     while #emptyViews < 3 + numTimetables do
+      local assignedVehicleWrapper = api.gui.comp.Component.new(
+          "assigned_vehicle_wrapper")
+      assignedVehicleWrapper:setGravity(0.5, 0)
+      local assignedVehicleLayout = api.gui.layout.BoxLayout.new("HORIZONTAL")
+      assignedVehicleWrapper:setLayout(assignedVehicleLayout)
+      table.insert(assignedVehicleWrappers, assignedVehicleWrapper)
+
       local removeLabel = api.gui.comp.TextView.new("-")
       removeLabel:setTooltip(_("remove_slot"))
       local removeButton = api.gui.comp.Button.new(removeLabel, true)
+      removeButton:setGravity(0.5, 0)
       local slotId = #emptyViews - 2
       removeButton:onClick(function()
           timetableWindowFuncs.removeTimeslot(guiState, slotId)
       end)
-      table.insert(emptyViews, removeButton)
+
+      local wrapper = api.gui.comp.Component.new("slot_header_wrapper")
+      local wrapperLayout = api.gui.layout.BoxLayout.new("HORIZONTAL")
+      wrapperLayout:addItem(assignedVehicleWrapper)
+      wrapperLayout:addItem(removeButton)
+      wrapper:setLayout(wrapperLayout)
+      table.insert(emptyViews, wrapper)
     end
     local addButton = api.gui.comp.Button.new(api.gui.comp.TextView.new("+"),
-      true)
+        true)
     addButton:setGravity(0.5, 0.0)
     addButton:onClick(function() timetableWindowFuncs.addTimeslot(guiState) end)
 
     table.insert(emptyViews, addButton)
 
     guiState.timetableWindow.stationTable:addRow(emptyViews)
+    guiState.timetableWindow.assignedVehicleWrappers = assignedVehicleWrappers
 
     -- Reset station data.
     guiState.timetableWindow.stationTableData = {}
@@ -539,6 +558,44 @@ function timetableWindowFuncs.refreshStationTable(guiState, index)
       guiState.timetableWindow.stationTableRows[v][2]:setTooltip(
           newStationData[v][3])
       guiState.timetableWindow.stationTableData[v] = newStationData[v]
+    end
+  end
+
+  -- Update the assigned vehicles, including their tooltips.
+  for slot, a in pairs(guiState.timetableWindow.assignedVehicleWrappers) do
+    if guiState.timetables.slotAssignments[lineId] and
+        guiState.timetables.slotAssignments[lineId][slot] then
+      local av = guiState.timetables.slotAssignments[lineId][slot]
+
+      -- Create the ImageView and button if needed.
+      if a:getLayout():getNumItems() == 0 then
+        local icon = api.gui.comp.Button.new(api.gui.comp.ImageView.new(
+            vehicleUtils.getIcon(av)), true)
+        icon:setMaximumSize(api.gui.util.Size.new(26, 26))
+        icon:onClick(function()
+            api.gui.util.getGameUI():getViewManager():openWindow(av, true, 0)
+        end)
+        icon:setGravity(0.5, 0.5)
+        a:getLayout():addItem(icon)
+      else
+        -- Make sure we have the right image and callback.
+        a:getLayout():getItem(0):getLayout():getItem(0):setImage(
+            vehicleUtils.getIcon(av), false)
+      end
+
+      -- Now construct the tooltip for the vehicle and make sure the click
+      -- callback is accurate.
+      a:getLayout():getItem(0):onClick(function()
+          api.gui.util.getGameUI():getViewManager():openWindow(av, true, 0)
+      end)
+      a:getLayout():getItem(0):setTooltip(vehicleUtils.getName(av) .. " (" ..
+          vehicleUtils.getStatus(av) .. ")")
+    else
+      -- Nothing is assigned to this timeslot, so remove any children of the
+      -- wrapper.
+      while a:getLayout():getNumItems() > 0 do
+        a:getLayout():removeItem(a:getLayout():getItem(0))
+      end
     end
   end
 end

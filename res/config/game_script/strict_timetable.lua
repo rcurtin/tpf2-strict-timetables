@@ -47,6 +47,8 @@ local guiState = {
     unassignedVehiclesIconList = {},
     -- The current list of unassigned vehicles.
     unassignedVehicles = {},
+    -- The Components that hold the assigned vehicle icons.
+    assignedVehicleWrappers = {},
     -- The IDs and names of the stations in the station table.
     stationTableData = {},
     -- The rows in the station table.
@@ -115,6 +117,17 @@ function data()
 
         print(" - Loaded timetable size: " ..
             tostring(#engineState.timetables.timetable))
+      end
+
+      -- If we are in the GUI thread, always overwrite any loaded vehicles and
+      -- slot assignments, since the engine thread sets them.
+      if guiState.timetables then
+        if loadedState.timetables and loadedState.timetables.slotAssignments then
+          guiState.timetables.slotAssignments = loadedState.timetables.slotAssignments
+        end
+        if loadedState.timetables and loadedState.timetables.vehicles then
+          guiState.timetables.vehicles = loadedState.timetables.vehicles
+        end
       end
 
       -- Update clock state if it was serialized.
@@ -331,7 +344,4 @@ end
 
 -- Features to implement:
 --  * gui should update with vehicles that are assigned to a slot
---
--- Things to test:
---  * remove an entire slot when a vehicle is assigned to it
---  * remove an entire slot when a vehicle is assigned to a subsequent timeslot
+--  * notifications when a vehicle departs late?
