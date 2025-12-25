@@ -94,6 +94,7 @@ return lineUtils
 --    * augment color codes onto the line table
 --
 -- Later:
+--    * allow forced departures for a given timetable, per station
 --    * annotate vehicle timetable history?
 --    * handle when stations change
 --

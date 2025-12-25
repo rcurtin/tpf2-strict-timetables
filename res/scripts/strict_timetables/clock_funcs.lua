@@ -69,4 +69,47 @@ function clockFuncs.initGUI()
   return clockGUI
 end
 
+--
+-- Return the difference (t2 - t1), always assuming that t2 comes *after* t1,
+-- even over boundaries.
+--
+function clockFuncs.timeDiff(t1, t2)
+  local diffSecs = 0
+  if t1.min > t2.min then
+    diffSecs = 60 * (60 - t1.min + t2.min)
+  else
+    diffSecs = 60 * (t2.min - t1.min)
+  end
+
+  if diffSecs == 0 then
+    if t1.sec > t2.sec then
+      -- We have to assume the difference is nearly an hour.
+      diffSecs = 3600 - (t1.sec - t2.sec)
+    else
+      diffSecs = t2.sec - t1.sec
+    end
+  else
+    -- It's okay if t1.secs > t2.secs, e.g. t1 = 10:15, t2 = 11:00; we already
+    -- counted the minute difference, so we just need to subtract the remainder.
+    diffSecs = diffSecs + (t2.sec - t1.sec)
+  end
+
+  local diffMins = math.floor(diffSecs / 60)
+
+  return { mins = diffMins, secs = diffSecs % 60 }
+end
+
+--
+-- Return true if t1 represents a smaller interval than t2.
+--
+function clockFuncs.smallerDiff(t1, t2)
+  if t1.mins < t2.mins then
+    return true
+  elseif t1.mins == t2.mins and t1.secs < t2.secs then
+    return true
+  else
+    return false
+  end
+end
+
 return clockFuncs

@@ -577,7 +577,7 @@ function timetableWindowFuncs.duplicateTimetable(guiState, duplicateCombobox)
     -- Modify the time by adding the right increment.
     k = 1
     -- Get the total number of stations.
-    while k < #lineUtils.getStationIds(lineId) do
+    while k <= #lineUtils.getStationIds(lineId) do
       if guiState.timetables.timetable[lineId][1][k] then
         local startMin = guiState.timetables.timetable[lineId][1][k][1]
         local startSec = guiState.timetables.timetable[lineId][1][k][2]

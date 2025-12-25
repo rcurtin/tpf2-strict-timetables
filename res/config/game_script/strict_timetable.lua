@@ -1,13 +1,16 @@
 local clockFuncs = require "strict_timetables/clock_funcs"
 local timetableWindowFuncs = require "strict_timetables/timetable_window_funcs"
 local debugUtils = require "strict_timetables/debug_utils"
+local timetableFuncs = require "strict_timetables/timetable_funcs"
 
 local engineState = {
   -- Timetable information.  This is meant to be read only!  The engine thread
   -- should not make any modifications.
   timetables = {
     enabled = {}, -- If enabled[lineId] is true, then the timetable is enabled.
-    timetable = {}
+    timetable = {},
+    slotAssignments = {}, -- slotAssignments[line][slot] --> vehicle
+    vehicles = {}, -- vehicles[v] --> { line, slot, current station }
   },
   -- Whether debugging output is enabled.  Prints the timetable to the log after
   -- every update.
@@ -55,7 +58,8 @@ local guiState = {
   -- Timetable information for each line.
   timetables = {
     enabled = {}, -- If enabled[lineId] is true, then the timetable is enabled.
-    timetable = {}
+    timetable = {},
+    slotAssignments = {}
   },
   -- Whether or not the timetable window should always
   -- be refreshed when shown.
@@ -92,6 +96,14 @@ function data()
           engineState.timetables.timetable = {}
         end
 
+        if not engineState.timetables.slotAssignments then
+          engineState.timetables.slotAssignments = {}
+        end
+
+        if not engineState.timetables.vehicles then
+          engineState.timetables.vehicles = {}
+        end
+
         if not engineState.timetables.enabled then
           engineState.timetables.enabled = {}
         end
@@ -117,7 +129,15 @@ function data()
       end
 
       -- Tick the time counter if needed.
+      local lastClock = { min = clock.min, sec = clock.sec }
       clock = clockFuncs.updateClock(clock)
+
+      -- Update all vehicles, but only the first time this callback happens
+      -- during this second.
+      if lastClock.sec ~= clock.sec then
+        timetableFuncs.vehicleUpdate(engineState.timetables, clock,
+            engineState.debug)
+      end
     end,
 
     guiInit = function()
@@ -232,6 +252,9 @@ function data()
           print("Engine: remove slot " .. tostring(param.slot) .. " from " ..
               "timetables for line " .. tostring(param.line) .. ".")
 
+          timetableFuncs.shiftVehiclesForRemovedSlot(engineState.timetables,
+              param.line, param.slot)
+
         elseif name == "update_time" then
           if not engineState.timetables.timetable[param.line] then
             engineState.timetables.timetable[param.line] = {}
@@ -248,6 +271,9 @@ function data()
               " to " .. tostring(param.mins) .. "m" .. tostring(param.secs) ..
               "s.")
 
+          -- Any assigned vehicles that are waiting will simply start getting a
+          -- different target departure time in the update step.
+
         elseif name == "remove_time" then
           if not engineState.timetables.timetable[param.line] then
             return
@@ -261,9 +287,17 @@ function data()
           print("Engine: remove slot " .. tostring(param.slot) .. " stop " ..
               tostring(param.stop) .. " on " .. tostring(param.line) .. ".")
 
+          -- Any assigned vehicles that are waiting will simply start getting
+          -- nil for the target departure time in the update step, at which
+          -- point they will be released.
+
         elseif name == "set_timetable" then
           engineState.timetables.timetable[param.line] = param.timetable
           print("Engine: set timetable for line " .. tostring(param.line) .. ".")
+
+          -- If we overwrote the timetable, any vehicles waiting on the first
+          -- release may need to be re-assigned.
+          timetableFuncs.resetVehiclesOnLine(engineState.timetables, param.line)
         end
 
       elseif id == "toggle_debug" then
@@ -295,11 +329,9 @@ function data()
   }
 end
 
--- Testing:
+-- Features to implement:
+--  * gui should update with vehicles that are assigned to a slot
 --
---   * does display of unassigned vehicles scale?
---      - make it a little taller so that the scrollbar works?
---   * when I change lines does the view clear?
---   * what if I apply filters
---   * delete line that is currently being viewed
---      -- seems like it just unselects the line?
+-- Things to test:
+--  * remove an entire slot when a vehicle is assigned to it
+--  * remove an entire slot when a vehicle is assigned to a subsequent timeslot
