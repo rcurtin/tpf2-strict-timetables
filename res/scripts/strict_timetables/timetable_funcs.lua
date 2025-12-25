@@ -59,12 +59,23 @@ function timetableFuncs.tryAssignSlot(timetables, clock, line, vehicle)
       timetables.slotAssignments[line] = {}
     end
     timetables.slotAssignments[line][bestSlot] = vehicle
-    timetables.vehicles[vehicle] = { slot = bestSlot, assigned = true }
+    timetables.vehicles[vehicle] = {
+        slot = bestSlot,
+        assigned = true,
+        stopIndex = 0,
+        released = false }
   else
-    timetables.vehicles[vehicle] = { slot = 0, assigned = false }
+    timetables.vehicles[vehicle] = {
+        slot = 0,
+        assigned = false,
+        stopIndex = 0,
+        released = false }
   end
 end
 
+--
+-- Release a vehicle if it is waiting.
+--
 function timetableFuncs.releaseIfNeeded(timetables, clock, line, vehicle,
     vehicleInfo, onTimeOnly, debug)
   -- First determine if the current stop/slot for this vehicle has a timeslot.
@@ -82,15 +93,15 @@ function timetableFuncs.releaseIfNeeded(timetables, clock, line, vehicle,
   end
 
   if depTarget ~= nil then
-    -- Disable automatic departure, if it's enabled.
-    if vehicleInfo.autoDeparture then
+    -- Disable automatic departure, if it's enabled, and we're waiting.
+    local d = clockFuncs.timeDiff(clock, depTarget)
+    if d.mins < 30 and vehicleInfo.autoDeparture then
       api.cmd.sendCommand(
           api.cmd.make.setVehicleManualDeparture(vehicle, true))
     end
 
     -- If a vehicle is more than 30 minutes late, we actually consider it 30
     -- minutes early!
-    local d = clockFuncs.timeDiff(clock, depTarget)
     if d.mins == 0 and d.secs == 0 then
       if debug then
         print("Engine: vehicle " .. tostring(vehicle) .. " on line " ..
@@ -102,6 +113,7 @@ function timetableFuncs.releaseIfNeeded(timetables, clock, line, vehicle,
       -- vehicle to depart.
       api.cmd.sendCommand(api.cmd.make.setVehicleShouldDepart(vehicle))
       timetables.vehicles[vehicle].assigned = false
+      timetables.vehicles[vehicle].released = true
     elseif d.mins >= 30 and not onTimeOnly then
       -- Here we don't force the train to leave unless it is still loading or
       -- unloading.  If the stop is a full load any/all, or has a minimum stop
@@ -119,7 +131,17 @@ function timetableFuncs.releaseIfNeeded(timetables, clock, line, vehicle,
         local waitingSecs = currGameTime -
             math.floor(vehicleInfo.doorsTime / 1000000)
         if waitingSecs >= 10 then
+          if debug then
+            local lateTime = clockFuncs.timeDiff({ min = d.mins, sec = d.secs },
+                { min = 0, sec = 0 })
+            print("Engine: vehicle " .. tostring(vehicle) .. " on line " ..
+                tostring(line) .. " slot " ..
+                tostring(timetables.vehicles[vehicle].slot) ..
+                " leaving late (" .. tostring(lateTime.mins) .. "m" ..
+                tostring(lateTime.secs) .. "s) after 10s of loading/unloading.")
+          end
           api.cmd.sendCommand(api.cmd.make.setVehicleShouldDepart(vehicle))
+          timetables.vehicles[vehicle].released = true
         end
       else
         -- The stop is not a full load of any sort, and doesn't have a minimum
@@ -136,14 +158,20 @@ function timetableFuncs.releaseIfNeeded(timetables, clock, line, vehicle,
         end
         api.cmd.sendCommand(api.cmd.make.setVehicleManualDeparture(vehicle,
             false))
+        timetables.vehicles[vehicle].released = true
       end
       timetables.vehicles[vehicle].assigned = false
     end
   elseif not vehicleInfo.autoDeparture then
     api.cmd.sendCommand(api.cmd.make.setVehicleManualDeparture(vehicle, false))
+    timetables.vehicles[vehicle].released = true
   end
 end
 
+--
+-- Called at the beginning of every second to handle releasing any vehicles from
+-- stations.
+--
 function timetableFuncs.vehicleUpdate(timetables, clock, debug)
   -- Iterate over all lines.
   local vehicleLineMap =
@@ -175,11 +203,19 @@ function timetableFuncs.vehicleUpdate(timetables, clock, debug)
             end
           end
 
+          -- If the stop index has changed, then take the appropriate action.
+          if vi.stopIndex ~= timetables.vehicles[v].stopIndex then
+            timetables.vehicles[v].stopIndex = vi.stopIndex
+            timetables.vehicles[v].released = false
+          end
+
           -- Release the vehicle from its station, if the time has come, and
           -- the vehicle is in a slot.  If it is the first stop, then we always
           -- force an on-time departure.
-          timetableFuncs.releaseIfNeeded(timetables, clock, l, v, vi,
-              (vi.stopIndex == 0), debug)
+          if not timetables.vehicles[v].released then
+            timetableFuncs.releaseIfNeeded(timetables, clock, l, v, vi,
+                (vi.stopIndex == 0), debug)
+          end
         end
       end
     end

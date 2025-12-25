@@ -104,6 +104,16 @@ function data()
 
         if not engineState.timetables.vehicles then
           engineState.timetables.vehicles = {}
+        else
+          -- Temporary: make sure we have everything.
+          for v, _ in pairs(engineState.timetables.vehicles) do
+            if not engineState.timetables.vehicles[v].stopIndex then
+              engineState.timetables.vehicles[v].stopIndex = 0
+            end
+            if not engineState.timetables.vehicles[v].released then
+              engineState.timetables.vehicles[v].released = false
+            end
+          end
         end
 
         if not engineState.timetables.enabled then
@@ -343,5 +353,7 @@ function data()
 end
 
 -- Features to implement:
---  * gui should update with vehicles that are assigned to a slot
 --  * notifications when a vehicle departs late?
+--  * better tooltips indicating if something was late
+--  * fix duplicate log messages for a released vehicle
+--  * allow configurable maximum lateness for a line
