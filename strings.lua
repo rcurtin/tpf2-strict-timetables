@@ -26,8 +26,8 @@ Note that there are [b]no arrival times[/b] in this mod; you only set the depart
       ["filter:"] = "Filter:",
       ["none"] = "None",
       ["debug_tooltip"] = "Debug mode: when enabled, print timetables to stdout every time they change, and print vehicle events.",
-      ["unassigned vehicles:"] = "Unassigned vehicles:",
-      -- used in the unassigned vehicle dialog; note the spacing
+      ["unassigned_vehicles"] = "Unassigned vehicles:",
+      -- used in the unassigned vehicle dialog
       ["stopped"] = "stopped",
       ["stopped at station"] = "stopped at station",
       ["en route"] = "en route)",

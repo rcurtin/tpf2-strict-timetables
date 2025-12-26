@@ -40,6 +40,8 @@ local guiState = {
     filters = nil,
     -- The table holding station and timetable information.
     stationTable = nil,
+    -- The currently-selected line ID.
+    selectedLine = nil,
     -- The table holding information about duplicating timetables.
     stationDuplicateTable = nil,
     -- The text input field for setting the maximum lateness of a line.

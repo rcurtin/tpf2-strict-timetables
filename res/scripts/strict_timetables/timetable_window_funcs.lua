@@ -383,6 +383,11 @@ function timetableWindowFuncs.refreshStationTable(guiState, index)
   local lineId =
       tonumber(guiState.timetableWindow.lineTableList[index][1])
   local l = api.engine.getComponent(lineId, api.type.ComponentType.LINE)
+  local changedLine = false
+  if lineId ~= guiState.timetableWindow.selectedLine then
+    changedLine = true
+    guiState.timetableWindow.selectedLine = lineId
+  end
 
   -- The first row of the station table contains all of the vehicles that are
   -- not currently assigned to a timeslot.
@@ -410,7 +415,7 @@ function timetableWindowFuncs.refreshStationTable(guiState, index)
   -- Check to see if any of the unassigned vehicles have changed.
   local anyChanged, changedIndices = miscUtils.differs(
       guiState.timetableWindow.unassignedVehicles, newUnassignedVehicles)
-  if anyChanged then
+  if anyChanged or changedLine then
     -- We need to rebuild the list from scratch.
     local iconList = {}
     for i, v in pairs(newUnassignedVehicles) do
@@ -427,7 +432,7 @@ function timetableWindowFuncs.refreshStationTable(guiState, index)
 
     local newTable = api.gui.comp.Table.new(#iconList + 1, "NONE")
     local unassignedVehiclesText = api.gui.comp.TextView.new(
-        _("unassigned vehicles:"))
+        _("unassigned_vehicles"))
     unassignedVehiclesText:setMinimumSize(api.gui.util.Size.new(200, 30))
     unassignedVehiclesText:setMaximumSize(api.gui.util.Size.new(200, 30))
     newTable:addRow({ unassignedVehiclesText, table.unpack(iconList) })
@@ -454,7 +459,7 @@ function timetableWindowFuncs.refreshStationTable(guiState, index)
   end
   local currentNumTimetables =
       guiState.timetableWindow.stationTable:getNumCols() - 4
-  if numTimetables ~= currentNumTimetables then
+  if numTimetables ~= currentNumTimetables or changedLine then
     guiState.timetableWindow.stationTable:deleteRows(0,
         guiState.timetableWindow.stationTable:getNumRows())
     guiState.timetableWindow.stationTable:setNumCols(4 + numTimetables)
@@ -521,7 +526,8 @@ function timetableWindowFuncs.refreshStationTable(guiState, index)
   -- Check to see if any station IDs or names have changed.
   anyChanged, changedIndices = miscUtils.differs(
       guiState.timetableWindow.stationTableData, newStationData)
-  if anyChanged or guiState.timetableWindow.stationTableRowsChanged then
+  if anyChanged or guiState.timetableWindow.stationTableRowsChanged or
+      changedLine then
     -- We have to rebuild the table entirely.
     guiState.timetableWindow.stationTable:deleteRows(1,
         guiState.timetableWindow.stationTable:getNumRows())
@@ -829,7 +835,7 @@ function timetableWindowFuncs.initWindow(guiState)
 
   -- Create the station table that gets shown when a line is selected.
   local unassignedVehiclesText = api.gui.comp.TextView.new(
-      _("unassigned vehicles:"))
+      _("unassigned_vehicles"))
   unassignedVehiclesText:setMinimumSize(api.gui.util.Size.new(200, 30))
   unassignedVehiclesText:setMaximumSize(api.gui.util.Size.new(200, 30))
   local unassignedVehiclesArea = api.gui.comp.ScrollArea.new(
