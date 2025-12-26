@@ -116,7 +116,7 @@ function timetableFuncs.releaseIfNeeded(timetables, clock, line, vehicle,
       if debug then
         print("StrictTimetables: vehicle " .. tostring(vehicle) ..
             " (" .. vehicleUtils.getName(vehicle) .. ") on line " ..
-            tostring(line) .. " ( " .. lineUtils.getName(line) .. ") slot " ..
+            tostring(line) .. " (" .. lineUtils.getName(line) .. ") slot " ..
             tostring(timetables.vehicles[vehicle].slot) ..
             " released on-time at " .. clockFuncs.printClock(depTarget) .. ".")
       end
