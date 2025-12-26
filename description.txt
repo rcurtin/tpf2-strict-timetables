@@ -10,6 +10,6 @@ Therefore the timetabling strategy here is [b]strict[/b]:
 
 [*] This time slot is specific to the entire route: so, e.g., if the first timed departure from the first station is set at 00:00, and the first timed departure from the second station is set at 11:00, a vehicle that gets the 00:00 departure from the first station will be assigned to the 11:00 first departure from the second station (and the first departure time slot from all subsequent stations).
 
-[*] If a vehicle arrives after its scheduled departure time, it will leave immediately in an attempt to make up for lost time.
+[*] If a vehicle arrives after its scheduled departure time, it will leave immediately (after unloading and loading, with a maximum of 10 seconds for a full load stop) in an attempt to make up for lost time.
 
 Note that there are [b]no arrival times[/b] in this mod; you only set the departure times at each stop.  Therefore, you might want to consider adding enough "slack" in the schedule to account for delays between stations (or just make sure that delays don't happen!).
