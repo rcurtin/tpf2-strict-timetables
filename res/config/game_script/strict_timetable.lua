@@ -95,6 +95,10 @@ function data()
     load = function (loadedState)
       -- On the very first load *only*, set the timetable state.
       -- Past this point, it will be managed entirely by the GUI thread.
+      if not loadedState then
+        print("StrictTimetables: got no state at all!")
+      end
+
       if loadedState and not loadedState.timetables then
         print("StrictTimetables: did not get a timetable!")
       end
@@ -144,7 +148,7 @@ function data()
 
       -- If we are in the GUI thread, always overwrite any loaded vehicles and
       -- slot assignments, since the engine thread sets them.
-      if guiState.timetables then
+      if guiState.timetables and loadedState then
         if loadedState.timetables and loadedState.timetables.slotAssignments then
           guiState.timetables.slotAssignments = loadedState.timetables.slotAssignments
         end
