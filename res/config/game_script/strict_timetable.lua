@@ -11,6 +11,7 @@ local engineState = {
     timetable = {},
     slotAssignments = {}, -- slotAssignments[line][slot] --> vehicle
     vehicles = {}, -- vehicles[v] --> { line, slot, current station }
+    maxLateness = {}
   },
   -- Whether debugging output is enabled.  Prints the timetable to the log after
   -- every update.
@@ -41,6 +42,12 @@ local guiState = {
     stationTable = nil,
     -- The table holding information about duplicating timetables.
     stationDuplicateTable = nil,
+    -- The text input field for setting the maximum lateness of a line.
+    maxLatenessText = nil,
+    -- The minute spinbox for setting the maximum lateness of a line.
+    maxLatenessMinSpinbox = nil,
+    -- The second spinbox for setting the maximum lateness of a line.
+    maxLatenessSecSpinbox = nil,
     -- The area in the station table that holds unassigned vehicles.
     unassignedVehiclesArea = nil,
     -- The list of icons displayed for unassigned vehicles.
@@ -61,7 +68,9 @@ local guiState = {
   timetables = {
     enabled = {}, -- If enabled[lineId] is true, then the timetable is enabled.
     timetable = {},
-    slotAssignments = {}
+    slotAssignments = {}, -- slotAssignments[line][slot] --> vehicle
+    vehicles = {}, -- vehicles[v] --> { line, slot, current station }
+    maxLateness = {}
   },
   -- Whether or not the timetable window should always
   -- be refreshed when shown.
@@ -87,11 +96,11 @@ function data()
       -- On the very first load *only*, set the timetable state.
       -- Past this point, it will be managed entirely by the GUI thread.
       if loadedState and not loadedState.timetables then
-        print("Did not get a timetable!!")
+        print("StrictTimetables: did not get a timetable!")
       end
 
       if not clock and loadedState and loadedState.timetables then
-        print("Loading saved timetable!")
+        print("StrictTimetables: loading saved timetable!")
         engineState.timetables = loadedState.timetables
 
         if not engineState.timetables.timetable then
@@ -116,6 +125,10 @@ function data()
           end
         end
 
+        if not engineState.timetables.maxLateness then
+          engineState.timetables.maxLateness = {}
+        end
+
         if not engineState.timetables.enabled then
           engineState.timetables.enabled = {}
         end
@@ -125,8 +138,8 @@ function data()
           engineState.debug = false
         end
 
-        print(" - Loaded timetable size: " ..
-            tostring(#engineState.timetables.timetable))
+        print("StrictTimetables: loaded timetable size: " ..
+            tostring(#engineState.timetables.timetable) .. ".")
       end
 
       -- If we are in the GUI thread, always overwrite any loaded vehicles and
@@ -137,6 +150,9 @@ function data()
         end
         if loadedState.timetables and loadedState.timetables.vehicles then
           guiState.timetables.vehicles = loadedState.timetables.vehicles
+        end
+        if loadedState.timetables and loadedState.timetables.maxLateness then
+          guiState.timetables.maxLateness = loadedState.timetables.maxLateness
         end
       end
 
@@ -164,13 +180,16 @@ function data()
     end,
 
     guiInit = function()
-      print("Initializing the GUI.")
+      print("StrictTimetables: initializing the GUI.")
       if not engineState.timetables then
-        print("No engine state!!")
+        print("StrictTimetables: no engine state!!")
       else
         guiState.timetables = engineState.timetables
         if not guiState.timetables.timetable then
           guiState.timetables.timetable = {}
+        end
+        if not guiState.timetables.maxLateness then
+          guiState.timetables.maxLateness = {}
         end
       end
     end,
@@ -240,14 +259,16 @@ function data()
 
       if id == "timetable_update" then
         if name == "toggle_timetable" then
-          print("Engine: toggle timetable for line " ..
-              tostring(param.line) .. ": " .. tostring(param.value) .. ".")
           if param.value == true then
             engineState.timetables.enabled[param.line] = param.value
           else
             engineState.timetables.enabled[param.line] = nil -- Remove when false.
           end
-          print("Engine: toggle complete.")
+
+          if engineState.debug then
+            print("StrictTimetables: toggle timetable for line " ..
+                tostring(param.line) .. ": " .. tostring(param.value) .. ".")
+          end
 
         elseif name == "add_timeslot" then
           if not engineState.timetables.timetable[param.line] then
@@ -256,10 +277,12 @@ function data()
             table.insert(engineState.timetables.timetable[param.line], {})
           end
 
-          print("Engine: set number of timetable slots for line " ..
-              tostring(param.line) ..  " to " ..
-              tostring(lineUtils.getNumTimetableSlots(param.line,
-                  engineState.timetables)) .. ".")
+          if engineState.debug then
+            print("StrictTimetables: set number of timetable slots for line " ..
+                tostring(param.line) ..  " to " ..
+                tostring(lineUtils.getNumTimetableSlots(param.line,
+                    engineState.timetables)) .. ".")
+          end
 
         elseif name == "remove_timeslot" then
           if not engineState.timetables.timetable[param.line] then
@@ -272,8 +295,10 @@ function data()
                 param.slot)
           end
 
-          print("Engine: remove slot " .. tostring(param.slot) .. " from " ..
-              "timetables for line " .. tostring(param.line) .. ".")
+          if engineState.debug then
+            print("StrictTimetables: remove slot " .. tostring(param.slot) ..
+                " from timetables for line " .. tostring(param.line) .. ".")
+          end
 
           timetableFuncs.shiftVehiclesForRemovedSlot(engineState.timetables,
               param.line, param.slot)
@@ -289,10 +314,12 @@ function data()
 
           engineState.timetables.timetable[param.line][param.slot][param.stop] =
               { param.mins, param.secs }
-          print("Engine: set slot " .. tostring(param.slot) .. " stop " ..
-              tostring(param.stop) .. " on line " .. tostring(param.line) ..
-              " to " .. tostring(param.mins) .. "m" .. tostring(param.secs) ..
-              "s.")
+          if engineState.debug then
+            print("StrictTimetables: set slot " .. tostring(param.slot) ..
+              " stop " .. tostring(param.stop) .. " on line " ..
+              tostring(param.line) ..  " to " .. tostring(param.mins) .. "m" ..
+              tostring(param.secs) ..  "s.")
+          end
 
           -- Any assigned vehicles that are waiting will simply start getting a
           -- different target departure time in the update step.
@@ -307,8 +334,12 @@ function data()
             engineState.timetables.timetable[
                 param.line][param.slot][param.stop] = nil
           end
-          print("Engine: remove slot " .. tostring(param.slot) .. " stop " ..
-              tostring(param.stop) .. " on " .. tostring(param.line) .. ".")
+
+          if engineState.debug then
+            print("StrictTimetables: remove slot " .. tostring(param.slot) ..
+                " stop " ..  tostring(param.stop) .. " on " ..
+                tostring(param.line) .. ".")
+          end
 
           -- Any assigned vehicles that are waiting will simply start getting
           -- nil for the target departure time in the update step, at which
@@ -316,19 +347,31 @@ function data()
 
         elseif name == "set_timetable" then
           engineState.timetables.timetable[param.line] = param.timetable
-          print("Engine: set timetable for line " .. tostring(param.line) .. ".")
+          if engineState.debug then
+            print("StrictTimetables: set timetable for line " ..
+                tostring(param.line) .. ".")
+          end
 
           -- If we overwrote the timetable, any vehicles waiting on the first
           -- release may need to be re-assigned.
           timetableFuncs.resetVehiclesOnLine(engineState.timetables, param.line)
+
+        elseif name == "update_max_lateness" then
+          engineState.timetables.maxLateness[param.line] = { min = param.min,
+              sec = param.sec }
+          if engineState.debug then
+            print("StrictTimetables: set maximum lateness for line " ..
+                tostring(param.line) .. " to " .. clockFuncs.printClock(
+                engineState.timetables.maxLateness[param.line]) .. ".")
+          end
         end
 
       elseif id == "toggle_debug" then
         if engineState.debug then
-          print("Engine: toggle debug mode off.")
+          print("StrictTimetables: toggle debug mode off.")
           engineState.debug = false
         else
-          print("Engine: toggle debug mode on.")
+          print("StrictTimetables: toggle debug mode on.")
           engineState.debug = true
         end
       end
@@ -351,9 +394,3 @@ function data()
     end
   }
 end
-
--- Features to implement:
---  * allow configurable maximum lateness for a line
---  * documentation
---  * fix for UI scaling changes
---  * finalize debugging output strings

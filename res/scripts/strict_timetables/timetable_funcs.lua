@@ -95,7 +95,14 @@ function timetableFuncs.releaseIfNeeded(timetables, clock, line, vehicle,
   if depTarget ~= nil then
     -- Disable automatic departure, if it's enabled, and we're waiting.
     local d = clockFuncs.timeDiff(clock, depTarget)
-    if d.mins < 30 and vehicleInfo.autoDeparture then
+    local maxLate = { min = 30, sec = 0 }
+    if timetables.maxLateness[line] then
+      maxLate = timetables.maxLateness[line]
+    end
+
+    if ((d.mins < maxLate.min) or
+        (d.mins == maxLate.min and d.secs < maxLate.sec)) and
+        vehicleInfo.autoDeparture then
       api.cmd.sendCommand(
           api.cmd.make.setVehicleManualDeparture(vehicle, true))
     end
@@ -105,8 +112,8 @@ function timetableFuncs.releaseIfNeeded(timetables, clock, line, vehicle,
     if d.mins == 0 and d.secs == 0 then
       -- On time: force the vehicle to depart.
       if debug then
-        print("Engine: vehicle " .. tostring(vehicle) .. " on line " ..
-            tostring(line) .. " slot " ..
+        print("StrictTimetables: vehicle " .. tostring(vehicle) ..
+            " on line " .. tostring(line) .. " slot " ..
             tostring(timetables.vehicles[vehicle].slot) ..
             " released on-time at " .. clockFuncs.printClock(depTarget) .. ".")
       end
@@ -114,7 +121,9 @@ function timetableFuncs.releaseIfNeeded(timetables, clock, line, vehicle,
       timetables.vehicles[vehicle].assigned = false
       timetables.vehicles[vehicle].released = true
       timetables.vehicles[vehicle].late = nil
-    elseif d.mins >= 30 and not onTimeOnly then
+    elseif (d.mins >= (60 - maxLate.min) or
+        ((d.mins == (60 - maxLate.min)) and (d.secs >= (60 - maxLate.sec)))) and
+        not onTimeOnly then
       -- Here we don't force the train to leave unless it is still loading or
       -- unloading.  If the stop is a full load any/all, or has a minimum stop
       -- time greater than 0s, then we have to force it.  In this case we'll
@@ -134,8 +143,8 @@ function timetableFuncs.releaseIfNeeded(timetables, clock, line, vehicle,
           local lateTime = clockFuncs.timeDiff({ min = d.mins, sec = d.secs },
               { min = 0, sec = 0 })
           if debug then
-            print("Engine: vehicle " .. tostring(vehicle) .. " on line " ..
-                tostring(line) .. " slot " ..
+            print("StrictTimetables: vehicle " .. tostring(vehicle) ..
+                " on line " .. tostring(line) .. " slot " ..
                 tostring(timetables.vehicles[vehicle].slot) ..
                 " leaving late (" .. tostring(lateTime.mins) .. "m" ..
                 tostring(lateTime.secs) .. "s) after 10s of loading/unloading.")
@@ -151,8 +160,8 @@ function timetableFuncs.releaseIfNeeded(timetables, clock, line, vehicle,
         local lateTime = clockFuncs.timeDiff({ min = d.mins, sec = d.secs },
             { min = 0, sec = 0 })
         if debug then
-          print("Engine: vehicle " .. tostring(vehicle) .. " on line " ..
-              tostring(line) .. " slot " ..
+          print("StrictTimetables: vehicle " .. tostring(vehicle) ..
+              " on line " ..  tostring(line) .. " slot " ..
               tostring(timetables.vehicles[vehicle].slot) ..
               " will leave late (" .. tostring(lateTime.mins) .. "m" ..
               tostring(lateTime.secs) .. "s) after loading and unloading.")
@@ -198,9 +207,9 @@ function timetableFuncs.vehicleUpdate(timetables, clock, debug)
             if debug then
               local slot = timetables.vehicles[v].slot
               if slot ~= 0 then
-                print("Engine: vehicle " .. tostring(v) .. " on line " ..
-                    tostring(l) .. " assigned to slot " .. tostring(slot) ..
-                    ".")
+                print("StrictTimetables: vehicle " .. tostring(v) ..
+                    " on line " ..  tostring(l) .. " assigned to slot " ..
+                    tostring(slot) ..  ".")
               end
             end
           end
@@ -235,12 +244,17 @@ function timetableFuncs.resetVehiclesOnLine(timetables, line)
 
     if vehicleLineMap[line] then
       for _, v in pairs(vehicleLineMap[line]) do
-        if timetables.vehicles[v] and
-            timetables.vehicles[v].assigned == true then
-          -- When .assigned is true, we are waiting to release from the first
-          -- stop.  So, set it to false, and the next update tick will re-assign
-          -- it to an open slot.
-          timetables.vehicles[v].assigned = false
+        if timetables.vehicles[v] then
+          if timetables.vehicles[v].assigned == true then
+            -- When .assigned is true, we are waiting to release from the first
+            -- stop.  So, set it to false, and the next update tick will
+            -- re-assign it to an open slot.
+            timetables.vehicles[v].assigned = false
+          elseif timetables.vehicles[v].slot ~= 0 then
+            -- Unassign from a slot.
+            timetables.vehicles[v].slot = 0
+            timetables.vehicles[v].late = nil
+          end
           timetables.slotAssignments[line][timetables.vehicles[v].slot] = nil
         end
       end

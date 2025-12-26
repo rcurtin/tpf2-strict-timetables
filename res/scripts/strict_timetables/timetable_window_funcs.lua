@@ -233,21 +233,25 @@ end
 --
 function timetableWindowFuncs.modifyTimeText(guiState, lineId, stopId,
     slotId, timeInput, minSpinbox, secSpinbox)
-  local validInput = (string.len(timeInput:getText()) == 5) and
-      (string.sub(timeInput:getText(), 1, 1) >= '0') and
-      (string.sub(timeInput:getText(), 1, 1) <= '5') and
-      (string.sub(timeInput:getText(), 2, 2) >= '0') and
-      (string.sub(timeInput:getText(), 2, 2) <= '9') and
-      (string.sub(timeInput:getText(), 3, 3) == ':') and
-      (string.sub(timeInput:getText(), 4, 4) >= '0') and
-      (string.sub(timeInput:getText(), 4, 4) <= '5') and
-      (string.sub(timeInput:getText(), 5, 5) >= '0') and
-      (string.sub(timeInput:getText(), 5, 5) <= '9')
+  local timeText = timeInput:getText()
+  if string.len(timeText) == 4 then
+    timeText = "0" .. timeText
+  end
+  local validInput = (string.len(timeText) == 5) and
+      (string.sub(timeText, 1, 1) >= '0') and
+      (string.sub(timeText, 1, 1) <= '5') and
+      (string.sub(timeText, 2, 2) >= '0') and
+      (string.sub(timeText, 2, 2) <= '9') and
+      (string.sub(timeText, 3, 3) == ':') and
+      (string.sub(timeText, 4, 4) >= '0') and
+      (string.sub(timeText, 4, 4) <= '5') and
+      (string.sub(timeText, 5, 5) >= '0') and
+      (string.sub(timeText, 5, 5) <= '9')
 
   if validInput then
     -- Set the spinbox values too, if needed.
-    local mins = tonumber(string.sub(timeInput:getText(), 1, 2))
-    local secs = tonumber(string.sub(timeInput:getText(), 4, 5))
+    local mins = tonumber(string.sub(timeText, 1, 2))
+    local secs = tonumber(string.sub(timeText, 4, 5))
 
     if minSpinbox:getValue() ~= mins then
       minSpinbox:setValue(mins)
@@ -272,6 +276,78 @@ function timetableWindowFuncs.modifyTimeText(guiState, lineId, stopId,
     -- Reset to the current spinbox values.
     timetableWindowFuncs.modifyTimeSpinbox(guiState, lineId, stopId, slotId,
         timeInput, minSpinbox, secSpinbox)
+  end
+end
+
+function timetableWindowFuncs.modifyMaxLateSpinbox(guiState, lineId)
+  local mins = guiState.timetableWindow.maxLatenessMinSpinbox:getValue()
+  if mins < 10 then
+    mins = "0" .. tostring(mins)
+  else
+    mins = tostring(mins)
+  end
+
+  local secs = guiState.timetableWindow.maxLatenessSecSpinbox:getValue()
+  if secs < 10 then
+    secs = "0" .. tostring(secs)
+  else
+    secs = tostring(secs)
+  end
+
+  local newText = mins .. ":" .. secs
+  if guiState.timetableWindow.maxLatenessText:getText() ~= newText then
+    guiState.timetableWindow.maxLatenessText:setText(newText, false)
+  end
+
+  local numMins = tonumber(mins)
+  local numSecs = tonumber(secs)
+  guiState.timetables.maxLateness[lineId] = { min = numMins, sec = numSecs }
+  table.insert(guiState.callbacks, function()
+      api.cmd.sendCommand(api.cmd.make.sendScriptEvent(
+          "strict_timetables.lua",
+          "timetable_update",
+          "update_max_lateness",
+          { line = lineId, min = numMins, sec = numSecs })) end)
+end
+
+function timetableWindowFuncs.modifyMaxLateText(guiState, lineId)
+  local timeText = guiState.timetableWindow.maxLatenessText:getText()
+  if string.len(timeText) == 4 then
+    timeText = "0" .. timeText
+  end
+  local validInput = (string.len(timeText) == 5) and
+      (string.sub(timeText, 1, 1) >= '0') and
+      (string.sub(timeText, 1, 1) <= '5') and
+      (string.sub(timeText, 2, 2) >= '0') and
+      (string.sub(timeText, 2, 2) <= '9') and
+      (string.sub(timeText, 3, 3) == ':') and
+      (string.sub(timeText, 4, 4) >= '0') and
+      (string.sub(timeText, 4, 4) <= '5') and
+      (string.sub(timeText, 5, 5) >= '0') and
+      (string.sub(timeText, 5, 5) <= '9')
+
+  if validInput then
+    -- Set the spinbox values too, if needed.
+    local mins = tonumber(string.sub(timeText, 1, 2))
+    local secs = tonumber(string.sub(timeText, 4, 5))
+
+    if guiState.timetableWindow.maxLatenessMinSpinbox:getValue() ~= mins then
+      guiState.timetableWindow.maxLatenessMinSpinbox:setValue(mins)
+    end
+    if guiState.timetableWindow.maxLatenessSecSpinbox:getValue() ~= secs then
+      guiState.timetableWindow.maxLatenessSecSpinbox:setValue(secs)
+    end
+
+    guiState.timetables.maxLateness[lineId] = { min = mins, sec = secs }
+    table.insert(guiState.callbacks, function()
+        api.cmd.sendCommand(api.cmd.make.sendScriptEvent(
+            "strict_timetables.lua",
+            "timetable_update",
+            "update_max_lateness",
+            { line = lineId, min = mins, sec = secs })) end)
+  else
+    -- Reset to the current spinbox values.
+    timetableWindowFuncs.modifyMaxLateSpinbox(guiState, lineId)
   end
 end
 
@@ -526,7 +602,7 @@ function timetableWindowFuncs.refreshStationTable(guiState, index)
             t:setColWidth(0, 10)
             t:setColWidth(1, 55)
             t:setColWidth(2, 10)
-            t:setColWidth(3, 15)
+            t:setColWidth(3, 14)
             table.insert(row, t)
           else
             local addButton = api.gui.comp.Button.new(
@@ -732,13 +808,6 @@ function timetableWindowFuncs.initWindow(guiState)
   lineTable:setColWidth(0, 28)
   lineTable:setColWidth(1, 178)
   lineTable:setColWidth(2, 30)
-  lineTable:onSelect(function(i)
-    if i >= 0 then
-      -- Lua is 1-indexed (and so is lineTableRows), but the comp.Table object
-      -- returns 0-indexed selections.
-      timetableWindowFuncs.refreshStationTable(guiState, i + 1)
-    end
-  end)
   guiState.timetableWindow.lineTable = lineTable
 
   -- Set up callbacks for all of the filters.
@@ -793,7 +862,9 @@ function timetableWindowFuncs.initWindow(guiState)
   stationScrollArea:setGravity(-1.0, -1.0)
 
   -- If a station has a timetable, this will be how it is duplicated.
-  local stationDuplicateTable = api.gui.comp.Table.new(3, 'NONE')
+  -- Extra columns are appending for setting the maximum lateness before a
+  -- train is considered early.
+  local stationDuplicateTable = api.gui.comp.Table.new(8, 'NONE')
   stationDuplicateTable:setGravity(0.0, 0.0)
   local stationDuplicateText = api.gui.comp.TextView.new(_("duplicate_text"))
   local stationDuplicateCombobox = api.gui.comp.ComboBox.new()
@@ -810,8 +881,40 @@ function timetableWindowFuncs.initWindow(guiState)
       timetableWindowFuncs.duplicateTimetable(guiState,
           stationDuplicateCombobox)
   end)
+
+  -- Spinbox to set the maximum lateness for a line.
+  local maxLatenessText = api.gui.comp.TextView.new(_("max_lateness"))
+  maxLatenessText:setTooltip(_("max_lateness_tooltip"))
+  local maxLatenessTime = api.gui.comp.TextInputField.new(
+      "StrictTimetable::TimetableEntry")
+  maxLatenessTime:setText("30:00", false)
+  maxLatenessTime:setGravity(0.5, 0.5)
+  maxLatenessTime:setMaximumSize(api.gui.util.Size.new(50, 30))
+  guiState.timetableWindow.maxLatenessText = maxLatenessTime
+
+  local maxLatenessMinSpinbox = api.gui.comp.SpinBox.new(0, 59, 30)
+  maxLatenessMinSpinbox:setGravity(0.0, 0.5)
+  maxLatenessMinSpinbox:getLayout():getItem(0):setVisible(false, false)
+  maxLatenessMinSpinbox:setName("StrictTimetable::TimetableSpinbox")
+  -- apply minimal style to + and - in the spinbox...
+  maxLatenessMinSpinbox:getLayout():getItem(1):getItem(0):getLayout():getItem(
+      0):setName("StrictTimetable::TimetableSpinbox")
+  maxLatenessMinSpinbox:getLayout():getItem(1):getItem(1):getLayout():getItem(
+      0):setName("StrictTimetable::TimetableSpinbox")
+  guiState.timetableWindow.maxLatenessMinSpinbox = maxLatenessMinSpinbox
+
+  local maxLatenessSecSpinbox = api.gui.comp.SpinBox.new(0, 59, 0)
+  maxLatenessSecSpinbox:setGravity(0.0, 0.5)
+  maxLatenessSecSpinbox:getLayout():getItem(0):setVisible(false, false)
+  maxLatenessSecSpinbox:getLayout():getItem(1):getItem(0):getLayout():getItem(
+      0):setName("StrictTimetable::TimetableSpinbox")
+  maxLatenessSecSpinbox:getLayout():getItem(1):getItem(1):getLayout():getItem(
+      0):setName("StrictTimetable::TimetableSpinbox")
+  guiState.timetableWindow.maxLatenessSecSpinbox = maxLatenessSecSpinbox
+
   stationDuplicateTable:addRow({ stationDuplicateText, stationDuplicateCombobox,
-      stationDuplicateApply })
+      stationDuplicateApply, api.gui.comp.TextView.new(""), maxLatenessText,
+      maxLatenessMinSpinbox, maxLatenessTime, maxLatenessSecSpinbox })
   stationDuplicateTable:setVisible(false, false)
   guiState.timetableWindow.stationDuplicateTable = stationDuplicateTable
 
@@ -865,6 +968,37 @@ function timetableWindowFuncs.initWindow(guiState)
               guiState.timetableWindow.lineTable:getSelected()[1] + 1)
         end
       end
+  end)
+
+  -- Now we can set the line table callback.
+  lineTable:onSelect(function(i)
+    if i >= 0 then
+      -- Lua is 1-indexed (and so is lineTableRows), but the comp.Table object
+      -- returns 0-indexed selections.  Note that we also need to pre-populate
+      -- the maximum lateness value.
+      local lineId = tonumber(guiState.timetableWindow.lineTableList[i + 1][1])
+      if not guiState.timetables.maxLateness[lineId] then
+        guiState.timetables.maxLateness[lineId] = { min = 30, sec = 0 }
+      end
+
+      local lateStr = clockFuncs.printClock(
+          guiState.timetables.maxLateness[lineId])
+      if lateStr ~= guiState.timetableWindow.maxLatenessText:getText() then
+        guiState.timetableWindow.maxLatenessText:setText(lateStr)
+        guiState.timetableWindow.maxLatenessMinSpinbox:setValue(
+            guiState.timetables.maxLateness[lineId].min)
+        guiState.timetableWindow.maxLatenessSecSpinbox:setValue(
+            guiState.timetables.maxLateness[lineId].sec)
+      end
+      guiState.timetableWindow.maxLatenessText:onEnter(function()
+          timetableWindowFuncs.modifyMaxLateText(guiState, lineId) end)
+      guiState.timetableWindow.maxLatenessMinSpinbox:onChange(function()
+          timetableWindowFuncs.modifyMaxLateSpinbox(guiState, lineId) end)
+      guiState.timetableWindow.maxLatenessSecSpinbox:onChange(function()
+          timetableWindowFuncs.modifyMaxLateSpinbox(guiState, lineId) end)
+
+      timetableWindowFuncs.refreshStationTable(guiState, i + 1)
+    end
   end)
 
   return
