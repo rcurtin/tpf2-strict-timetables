@@ -27,7 +27,6 @@ Note that there are [b]no arrival times[/b] in this mod; you only set the depart
       ["none"] = "None",
       ["debug_tooltip"] = "Debug mode: when enabled, print timetables to stdout every time they change, and print vehicle events.",
       ["unassigned_vehicles"] = "Unassigned vehicles:",
-      -- used in the unassigned vehicle dialog
       ["stopped"] = "stopped",
       ["stopped at station"] = "stopped at station",
       ["en route"] = "en route)",
@@ -37,7 +36,6 @@ Note that there are [b]no arrival times[/b] in this mod; you only set the depart
       ["not assigned to a line"] = "not assigned to a line",
       ["unknown line"] = "unknown line",
       ["unknown station"] = "unknown station",
-      -- used for tooltips in the timetable editing dialog.
       ["remove_slot"] = "Remove this timetable slot (all entries in this column).",
       ["add_entry"] = "Add a timetable entry.",
       ["remove_entry"] = "Remove this timetable entry.",

@@ -58,17 +58,9 @@ function vehicleUtils.getStatus(vehicle)
 
   -- Get the name of the station we are heading to or that we are at.
   local nextStationGroupId = line.stops[vehicleInfo.stopIndex + 1].stationGroup
-  local nextStationId = line.stops[vehicleInfo.stopIndex + 1].station
-  local nextStationGroup = api.engine.getComponent(nextStationGroupId,
-      api.type.ComponentType.STATION_GROUP)
-  local nextStationName = ""
-
-  if nextStationGroup and nextStationGroup.stations and
-      nextStationId < #nextStationGroup.stations then
-    nextStationName = api.engine.getComponent(
-        nextStationGroup.stations[nextStationId + 1],
-        api.type.ComponentType.NAME).name
-  end
+  local nextStationName = api.engine.getComponent(
+      nextStationGroupId,
+      api.type.ComponentType.NAME).name
 
   if nextStationName == "" then
     if vehicleInfo.state ==

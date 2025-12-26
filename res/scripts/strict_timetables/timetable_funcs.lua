@@ -2,6 +2,8 @@
 --
 -- Engine thread utilities to actually run the timetables.
 local clockFuncs = require "strict_timetables/clock_funcs"
+local vehicleUtils = require "strict_timetables/vehicle_utils"
+local lineUtils = require "strict_timetables/line_utils"
 
 timetableFuncs = {}
 
@@ -113,7 +115,8 @@ function timetableFuncs.releaseIfNeeded(timetables, clock, line, vehicle,
       -- On time: force the vehicle to depart.
       if debug then
         print("StrictTimetables: vehicle " .. tostring(vehicle) ..
-            " on line " .. tostring(line) .. " slot " ..
+            " (" .. vehicleUtils.getName(vehicle) .. ") on line " ..
+            tostring(line) .. " ( " .. lineUtils.getName(line) .. ") slot " ..
             tostring(timetables.vehicles[vehicle].slot) ..
             " released on-time at " .. clockFuncs.printClock(depTarget) .. ".")
       end
@@ -148,9 +151,10 @@ function timetableFuncs.releaseIfNeeded(timetables, clock, line, vehicle,
           local lateTime = clockFuncs.timeDiff({ min = d.mins, sec = d.secs },
               { min = 0, sec = 0 })
           if debug then
-            print("StrictTimetables: vehicle " .. tostring(vehicle) ..
-                " on line " .. tostring(line) .. " slot " ..
-                tostring(timetables.vehicles[vehicle].slot) ..
+            print("StrictTimetables: vehicle " .. tostring(vehicle) .. " (" ..
+                vehicleUtils.getName(vehicle) .. ") on line " ..
+                tostring(line) .. " (" .. lineUtils.getName(line) ..
+                ") slot " .. tostring(timetables.vehicles[vehicle].slot) ..
                 " leaving late (" .. tostring(lateTime.mins) .. "m" ..
                 tostring(lateTime.secs) .. "s) after 10s of loading/unloading.")
           end
@@ -165,8 +169,9 @@ function timetableFuncs.releaseIfNeeded(timetables, clock, line, vehicle,
         local lateTime = clockFuncs.timeDiff({ min = d.mins, sec = d.secs },
             { min = 0, sec = 0 })
         if debug then
-          print("StrictTimetables: vehicle " .. tostring(vehicle) ..
-              " on line " ..  tostring(line) .. " slot " ..
+          print("StrictTimetables: vehicle " .. tostring(vehicle) .. " (" ..
+              vehicleUtils.getName(vehicle) .. ") on line " ..
+              tostring(line) .. " (" .. lineUtils.getName(line) .. ") slot " ..
               tostring(timetables.vehicles[vehicle].slot) ..
               " will leave late (" .. tostring(lateTime.mins) .. "m" ..
               tostring(lateTime.secs) .. "s) after loading and unloading.")
@@ -212,8 +217,9 @@ function timetableFuncs.vehicleUpdate(timetables, clock, debug)
             if debug then
               local slot = timetables.vehicles[v].slot
               if slot ~= 0 then
-                print("StrictTimetables: vehicle " .. tostring(v) ..
-                    " on line " ..  tostring(l) .. " assigned to slot " ..
+                print("StrictTimetables: vehicle " .. tostring(v) .. " (" ..
+                    vehicleUtils.getName(v) .. ") on line " .. tostring(l) ..
+                    " (" .. lineUtils.getName(l) .. ") assigned to slot " ..
                     tostring(slot) ..  ".")
               end
             end
@@ -258,12 +264,14 @@ function timetableFuncs.resetVehiclesOnLine(timetables, line)
             -- stop.  So, set it to false, and the next update tick will
             -- re-assign it to an open slot.
             timetables.vehicles[v].assigned = false
-          elseif timetables.vehicles[v].slot ~= 0 then
-            -- Unassign from a slot.
+            timetables.slotAssignments[line][timetables.vehicles[v].slot] = nil
+          elseif timetables.vehicles[v].slot ~= 0 and
+              timetables.vehicles[v].slot > #timetables.timetable[line] then
+            -- Unassign from a no-longer-existent slot.
             timetables.vehicles[v].slot = 0
             timetables.vehicles[v].late = nil
+            timetables.slotAssignments[line][timetables.vehicles[v].slot] = nil
           end
-          timetables.slotAssignments[line][timetables.vehicles[v].slot] = nil
         end
       end
     end
