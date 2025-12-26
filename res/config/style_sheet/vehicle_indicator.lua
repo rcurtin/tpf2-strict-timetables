@@ -10,7 +10,9 @@ function data()
     "Vehicle::Late",
     {
       color = { 1.0, 0, 0, 0.5 },
-      backgroundColor = { 1.0, 0, 0, 0.5 }
+      backgroundColor = { 1.0, 0, 0, 0.5 },
+      borderColor = { 1.0, 0, 0, 0.5 },
+      borderWidth = { 4, 4, 4, 4 }
     }
   )
 

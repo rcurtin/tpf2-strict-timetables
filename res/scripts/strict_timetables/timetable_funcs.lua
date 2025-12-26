@@ -118,7 +118,12 @@ function timetableFuncs.releaseIfNeeded(timetables, clock, line, vehicle,
             " released on-time at " .. clockFuncs.printClock(depTarget) .. ".")
       end
       api.cmd.sendCommand(api.cmd.make.setVehicleShouldDepart(vehicle))
-      timetables.vehicles[vehicle].assigned = false
+      if timetables.vehicles[vehicle].stopIndex > 0 then
+        -- If we set assigned to false when leaving the first station, then it
+        -- is possible that the vehicle will get reassigned to a different slot
+        -- before it leaves!
+        timetables.vehicles[vehicle].assigned = false
+      end
       timetables.vehicles[vehicle].released = true
       timetables.vehicles[vehicle].late = nil
     elseif (d.mins >= (60 - maxLate.min) or
@@ -212,6 +217,9 @@ function timetableFuncs.vehicleUpdate(timetables, clock, debug)
                     tostring(slot) ..  ".")
               end
             end
+          elseif not timetables.vehicles[v] then
+            timetables.vehicles[v] = { slot = 0, assigned = false,
+                stopIndex = vi.stopIndex, released = false }
           end
 
           -- If the stop index has changed, then take the appropriate action.
