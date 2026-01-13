@@ -121,12 +121,6 @@ function timetableFuncs.releaseIfNeeded(timetables, clock, line, vehicle,
             " released on-time at " .. clockFuncs.printClock(depTarget) .. ".")
       end
       api.cmd.sendCommand(api.cmd.make.setVehicleShouldDepart(vehicle))
-      if timetables.vehicles[vehicle].stopIndex > 0 then
-        -- If we set assigned to false when leaving the first station, then it
-        -- is possible that the vehicle will get reassigned to a different slot
-        -- before it leaves!
-        timetables.vehicles[vehicle].assigned = false
-      end
       timetables.vehicles[vehicle].released = true
       timetables.vehicles[vehicle].late = nil
     elseif (d.mins >= (60 - maxLate.min) or
@@ -181,7 +175,6 @@ function timetableFuncs.releaseIfNeeded(timetables, clock, line, vehicle,
         timetables.vehicles[vehicle].released = true
         timetables.vehicles[vehicle].late = lateTime
       end
-      timetables.vehicles[vehicle].assigned = false
     end
   elseif not vehicleInfo.autoDeparture then
     api.cmd.sendCommand(api.cmd.make.setVehicleManualDeparture(vehicle, false))
@@ -200,12 +193,22 @@ function timetableFuncs.vehicleUpdate(timetables, clock, debug)
   for l, vs in pairs(vehicleLineMap) do
     -- Only check vehicles where we have an active timetable.
     if timetables.enabled[l] then
+      local lineInfo = api.engine.getComponent(l, api.type.ComponentType.LINE)
+
       -- Now iterate over all the vehicles to see if they have a state update.
       for _, v in pairs(vs) do
         -- We only have something to do if the vehicle is at a station.
         local vi = api.engine.getComponent(v,
             api.type.ComponentType.TRANSPORT_VEHICLE)
         if vi.state == api.type.enum.TransportVehicleState.AT_TERMINAL then
+--          if debug and timetables.vehicles[v] then
+--            print("StrictTimetables: vehicle " .. tostring(v) .. " status: " ..
+--                "{ assigned: " .. tostring(timetables.vehicles[v].assigned) ..
+--                ", slot " .. tostring(timetables.vehicles[v].slot) ..
+--                ", stopIndex " .. tostring(timetables.vehicles[v].stopIndex) ..
+--                "}.")
+--          end
+
           -- If this station is the first, then we have the possibility that
           -- we are able to assign the vehicle to a slot.
           local assignable = (not timetables.vehicles[v]) or
@@ -241,6 +244,49 @@ function timetableFuncs.vehicleUpdate(timetables, clock, debug)
             timetableFuncs.releaseIfNeeded(timetables, clock, l, v, vi,
                 (vi.stopIndex == 0), debug)
           end
+        elseif timetables.vehicles[v] and timetables.vehicles[v].slot then
+          -- If the vehicle is returning back to the first stop and will not
+          -- make it there in time for the first departure, then yield the slot.
+          if timetables.vehicles[v].stopIndex == #lineInfo.stops + 1 then
+            print("Check vehicle " .. tostring(v) .. " in slot " .. tostring(timetables.vehicles[v].slot))
+            -- Check the target release time of the first timetabled station.
+            local firstTimedStop = 1
+            while firstTimedStop <= #timetables.timetable[line][slot] do
+              -- Does this stop have a timetable?
+              if timetables.timetable[line][slot][firstTimedStop] ~= nil then
+                -- If so, it's the first timed stop.
+                break
+              end
+
+              firstTimedStop = firstTimedStop + 1
+            end
+
+            local d = clockFuncs.timeDiff(clock,
+                timetables.timetable[l][timetables.vehicles[v].slot][
+                firstTimedStop])
+            local maxLate = { min = 30, sec = 0 }
+            if timetables.maxLateness[line] then
+              maxLate = timetables.maxLateness[line]
+            end
+            print("diff " .. tostring(d.mins) .. ":" .. tostring(d.secs))
+
+            if ((d.mins == 0 and d.secs < 5) or
+                (d.mins >= (60 - maxLate.min)) or
+                ((d.mins == (60 - maxLate.min)) and
+                 (d.secs >= (60 - maxLate.sec)))) then
+              if debug then
+                print("StrictTimetables: vehicle " .. tostring(v) .. " (" ..
+                    vehicleUtils.getName(v) .. ") on line " .. tostring(l) ..
+                    " (" .. lineUtils.getName(l) .. ") is too late to keep " ..
+                    "slot " .. tostring(timetables.vehicles[v].slot) .. "; " ..
+                    "unassigned.")
+              end
+
+              timetables.slotAssignments[l][timetables.vehicles[v].slot] = nil
+              timetables.vehicles[v] = { slot = 0, assigned = false,
+                  stopIndex = 0, released = false }
+            end
+          end
         end
       end
     end
@@ -259,18 +305,27 @@ function timetableFuncs.resetVehiclesOnLine(timetables, line)
     if vehicleLineMap[line] then
       for _, v in pairs(vehicleLineMap[line]) do
         if timetables.vehicles[v] then
-          if timetables.vehicles[v].assigned == true then
+          if timetables.vehicles[v].assigned == true and
+              timetables.vehicles[v].stopIndex == 0 and
+              timetables.vehicles[v].released == false then
             -- When .assigned is true, we are waiting to release from the first
             -- stop.  So, set it to false, and the next update tick will
             -- re-assign it to an open slot.
+            print("Reset vehicle " .. tostring(v) .. "!")
             timetables.vehicles[v].assigned = false
             timetables.slotAssignments[line][timetables.vehicles[v].slot] = nil
+            timetables.vehicles[v].slot = 0
           elseif timetables.vehicles[v].slot ~= 0 and
               timetables.vehicles[v].slot > #timetables.timetable[line] then
             -- Unassign from a no-longer-existent slot.
+            print("Vehicle " .. tostring(v) .. " now in an invalid slot, reset!")
             timetables.vehicles[v].slot = 0
             timetables.vehicles[v].late = nil
             timetables.slotAssignments[line][timetables.vehicles[v].slot] = nil
+          elseif timetables.vehicles[v] then
+            print("Vehicle " .. tostring(v) .. " slot " .. tostring(timetables.vehicles[v].slot))
+          else
+            print("Vehicle " .. tostring(v) .. " not in timetable!")
           end
         end
       end

@@ -650,8 +650,24 @@ function timetableWindowFuncs.refreshStationTable(guiState, index)
         guiState.timetables.slotAssignments[lineId][slot] then
       local av = guiState.timetables.slotAssignments[lineId][slot]
 
+      -- If the late state changed, or if nothing exists, then we need to create
+      -- a new ImageView and button.
+      local curName = ""
+      if a:getLayout():getNumItems() > 0 then
+        curName = a:getLayout():getItem(0):getName()
+      end
+      local needsNew = (a:getLayout():getNumItems() == 0) or
+          (guiState.timetables.vehicles[av].late and
+           curName ~= "StrictTimetables::LateVehicle") or
+          (not guiState.timetables.vehicles[av].late and
+           curName == "StrictTimetables::LateVehicle")
+
       -- Create the ImageView and button if needed.
-      if a:getLayout():getNumItems() == 0 then
+      if needsNew then
+        while a:getLayout():getNumItems() > 0 do
+          a:getLayout():removeItem(a:getLayout():getItem(0))
+        end
+
         local icon = api.gui.comp.Button.new(api.gui.comp.ImageView.new(
             vehicleUtils.getIcon(av)), true)
         icon:setMaximumSize(api.gui.util.Size.new(26, 26))
@@ -659,6 +675,10 @@ function timetableWindowFuncs.refreshStationTable(guiState, index)
             api.gui.util.getGameUI():getViewManager():openWindow(av, true, 0)
         end)
         icon:setGravity(0.5, 0.5)
+        if guiState.timetables.vehicles[av].late then
+          icon:setName("StrictTimetables::LateVehicle")
+        end
+
         a:getLayout():addItem(icon)
       else
         -- Make sure we have the right image and callback.
@@ -674,7 +694,7 @@ function timetableWindowFuncs.refreshStationTable(guiState, index)
 
       local tooltipStr = vehicleUtils.getName(av) .. " (" ..
           vehicleUtils.getStatus(av) .. "): stop " ..
-          tostring(guiState.timetables.vehicles[av].stopIndex + 1) ..
+          tostring(guiState.timetables.vehicles[av].stopIndex + 2) ..
           " of " .. tostring(#guiState.timetableWindow.stationTableRows)
       if not guiState.timetables.vehicles[av].late then
         tooltipStr = tooltipStr .. "."
@@ -702,13 +722,6 @@ function timetableWindowFuncs.refreshStationTable(guiState, index)
       end
 
       a:getLayout():getItem(0):setTooltip(tooltipStr)
-
-      -- Tint the background of the icon, if we are late.
-      if guiState.timetables.vehicles[av].late then
-        a:setName("Vehicle::Late")
-      else
-        a:setName("Vehicle::OnTime")
-      end
     else
       -- Nothing is assigned to this timeslot, so remove any children of the
       -- wrapper.
@@ -990,7 +1003,7 @@ function timetableWindowFuncs.initWindow(guiState)
       local lateStr = clockFuncs.printClock(
           guiState.timetables.maxLateness[lineId])
       if lateStr ~= guiState.timetableWindow.maxLatenessText:getText() then
-        guiState.timetableWindow.maxLatenessText:setText(lateStr)
+        guiState.timetableWindow.maxLatenessText:setText(lateStr, false)
         guiState.timetableWindow.maxLatenessMinSpinbox:setValue(
             guiState.timetables.maxLateness[lineId].min)
         guiState.timetableWindow.maxLatenessSecSpinbox:setValue(
