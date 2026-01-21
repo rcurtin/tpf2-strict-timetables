@@ -432,11 +432,12 @@ function timetableWindowFuncs.refreshStationTable(guiState, index)
 
     local newTable = api.gui.comp.Table.new(#iconList + 1, "NONE")
     local unassignedVehiclesText = api.gui.comp.TextView.new(
-        _("unassigned_vehicles"))
+        guiState.timetableWindow.unassignedVehiclesText:getText())
     unassignedVehiclesText:setMinimumSize(api.gui.util.Size.new(200, 30))
     unassignedVehiclesText:setMaximumSize(api.gui.util.Size.new(200, 30))
     newTable:addRow({ unassignedVehiclesText, table.unpack(iconList) })
 
+    guiState.timetableWindow.unassignedVehiclesText = unassignedVehiclesText
     guiState.timetableWindow.unassignedVehicles = newUnassignedVehicles
     guiState.timetableWindow.unassignedVehiclesIconList = iconList
     guiState.timetableWindow.unassignedVehiclesArea:setContent(newTable)
@@ -854,6 +855,7 @@ function timetableWindowFuncs.initWindow(guiState)
   local unassignedVehiclesArea = api.gui.comp.ScrollArea.new(
       unassignedVehiclesText, "strict_timetable.UnassignedVehicles")
   unassignedVehiclesArea:setGravity(-1.0, 0.0)
+  guiState.timetableWindow.unassignedVehiclesText = unassignedVehiclesText
   guiState.timetableWindow.unassignedVehiclesArea = unassignedVehiclesArea
 
   local stationTable = api.gui.comp.Table.new(4, "NONE")

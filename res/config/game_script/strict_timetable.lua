@@ -56,6 +56,8 @@ local guiState = {
     unassignedVehiclesIconList = {},
     -- The current list of unassigned vehicles.
     unassignedVehicles = {},
+    -- The text component that says "Unassigned vehicles".
+    unassignedVehiclesText = nil,
     -- The Components that hold the assigned vehicle icons.
     assignedVehicleWrappers = {},
     -- The IDs and names of the stations in the station table.
@@ -268,7 +270,8 @@ function data()
           if param.value == true then
             engineState.timetables.enabled[param.line] = param.value
           else
-            engineState.timetables.enabled[param.line] = nil -- Remove when false.
+            engineState.timetables.enabled[param.line] = nil -- Remove.
+            timetableFuncs.clearVehicles(engineState.timetables, param.line)
           end
 
           if engineState.debug then
