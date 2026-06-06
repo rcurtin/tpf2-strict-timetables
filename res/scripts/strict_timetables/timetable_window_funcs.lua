@@ -648,8 +648,12 @@ function timetableWindowFuncs.refreshStationTable(guiState, index)
   -- Update the assigned vehicles, including their tooltips.
   for slot, a in pairs(guiState.timetableWindow.assignedVehicleWrappers) do
     if guiState.timetables.slotAssignments[lineId] and
-        guiState.timetables.slotAssignments[lineId][slot] then
+        guiState.timetables.slotAssignments[lineId][slot] and
+        api.engine.entityExists( -- Check that the user didn't delete it...
+            guiState.timetables.slotAssignments[lineId][slot]) then
       local av = guiState.timetables.slotAssignments[lineId][slot]
+
+      -- TODO: handle if guiState.timetables.vehicles[av] is nil!
 
       -- If the late state changed, or if nothing exists, then we need to create
       -- a new ImageView and button.

@@ -21,13 +21,18 @@ end
 function vehicleUtils.getIcon(vehicle)
   local vehicleInfo = api.engine.getComponent(vehicle,
       api.type.ComponentType.TRANSPORT_VEHICLE)
+  local imagePath = "ui/icons/game-menu/hud_filter_trains.tga"
+  if not vehicleInfo then
+    -- unknown, default to a train!
+    return imagePath
+  end
+
   local vehicleType = api.type.enum.Carrier["RAIL"] -- default assumption...
   if vehicleInfo and vehicleInfo.carrier then
     vehicleType = vehicleInfo.carrier
   end
 
   -- Get the icon associated with the vehicle type.
-  local imagePath = "ui/icons/game-menu/hud_filter_trains.tga"
   if vehicleType == api.type.enum.Carrier["ROAD"] then
     imagePath = "ui/icons/game-menu/hud_filter_road_vehicles.tga"
   elseif vehicleType == api.type.enum.Carrier["TRAM"] then
@@ -45,7 +50,7 @@ end
 function vehicleUtils.getStatus(vehicle)
   local vehicleInfo = api.engine.getComponent(vehicle,
       api.type.ComponentType.TRANSPORT_VEHICLE)
-  if not vehicleInfo.line then
+  if not vehicleInfo or not vehicleInfo.line then
     return _("not assigned to a line")
   end
 

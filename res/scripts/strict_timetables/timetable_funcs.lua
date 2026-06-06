@@ -24,6 +24,11 @@ end
 -- not currently any open slots.
 --
 function timetableFuncs.tryAssignSlot(timetables, clock, line, vehicle)
+  -- If the timetable doesn't exist but is enabled, then just return for now.
+  if not timetables.timetable[line] then
+    return
+  end
+
   -- Find the next starting timeslot closest to us in time.
   local slot = 1
   local bestDiff = { mins = 60, secs = 0 }
@@ -215,6 +220,20 @@ function timetableFuncs.vehicleUpdate(timetables, clock, debug)
   for l, vs in pairs(vehicleLineMap) do
     -- Only check vehicles where we have an active timetable.
     if timetables.enabled[l] then
+      -- Sanity check before we start: does the vehicle still exist?
+      if timetables.slotAssignments[l] then
+        for s, v in pairs(timetables.slotAssignments[l]) do
+          if v and not api.engine.entityExists(v) then
+            if debug then
+              print("StrictTimetables: vehicle " .. tostring(v) ..
+                " no longer exists!  Deleting.")
+            end
+            timetables.slotAssignments[s] = nil
+            timetables.vehicles[v] = nil
+          end
+        end
+      end
+
       local lineInfo = api.engine.getComponent(l, api.type.ComponentType.LINE)
 
       -- Now iterate over all the vehicles to see if they have a state update.
