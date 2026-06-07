@@ -10,6 +10,7 @@ function clockFuncs.initClock()
   end
 
   return {
+    hour = 0,
     min = 0,
     sec = 0,
     refTime = time
@@ -25,8 +26,10 @@ function clockFuncs.updateClock(clock)
   if time and clock then
     local totalSecs = math.floor((time - clock.refTime) / 1000)
     local totalMins = math.floor(totalSecs / 60)
+    local totalHours = math.floor(totalMins / 60)
 
     return {
+      hour = totalHours,
       min = totalMins % 60,
       sec = totalSecs % 60,
       refTime = clock.refTime
@@ -50,6 +53,12 @@ end
 -- printed.
 function clockFuncs.printClock(clock)
   local t = { clockFuncs.formatTime(clock.min), ":",
+      clockFuncs.formatTime(clock.sec) }
+  return table.concat(t, "")
+end
+
+function clockFuncs.printFullClock(clock)
+  local t = { clock.hour, ":", clockFuncs.formatTime(clock.min), ":",
       clockFuncs.formatTime(clock.sec) }
   return table.concat(t, "")
 end

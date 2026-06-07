@@ -351,6 +351,40 @@ function timetableWindowFuncs.modifyMaxLateText(guiState, lineId)
   end
 end
 
+function timetableWindowFuncs.modifyHourSpanSpinbox(guiState, lineId)
+  local hours = guiState.timetableWindow.hourSpanSpinbox:getValue()
+  local newText = tostring(hours)
+  if guiState.timetableWindow.hourSpanText:getText() ~= newText then
+    guiState.timetableWindow.hourSpanText:setText(newText, false)
+  end
+
+  guiState.timetables.hourSpans[lineId] = hours
+  table.insert(guiState.callbacks, function()
+      api.cmd.sendCommand(api.cmd.make.sendScriptEvent(
+          "strict_timetables.lua",
+          "timetable_update",
+          "update_hour_span",
+          { line = lineId, hours = hours })) end)
+end
+
+function timetableWindowFuncs.modifyHourSpanText(guiState, lineId)
+  local hours = tonumber(guiState.timetableWindow.hourSpanText:getText())
+  if hours ~= nil and hours < 10 and hours > 0 then
+    guiState.timetableWindow.hourSpanSpinbox:setValue(hours)
+
+    guiState.timetables.hourSpans[lineId] = hours
+    table.insert(guiState.callbacks, function()
+        api.cmd.sendCommand(api.cmd.make.sendScriptEvent(
+            "strict_timetables.lua",
+            "timetable_update",
+            "update_hour_span",
+            { line = lineId, hours = hours })) end)
+  else
+    -- Reset to the current spinbox values.
+    timetableWindowFuncs.modifyHourSpanSpinbox(guiState, lineId)
+  end
+end
+
 function timetableWindowFuncs.removeTime(guiState, lineId, stopId, slotId)
   if not guiState.timetables.timetable[lineId] then
     return
@@ -889,7 +923,7 @@ function timetableWindowFuncs.initWindow(guiState)
   -- If a station has a timetable, this will be how it is duplicated.
   -- Extra columns are appending for setting the maximum lateness before a
   -- train is considered early.
-  local stationDuplicateTable = api.gui.comp.Table.new(8, 'NONE')
+  local stationDuplicateTable = api.gui.comp.Table.new(13, 'NONE')
   stationDuplicateTable:setGravity(0.0, 0.0)
   local stationDuplicateText = api.gui.comp.TextView.new(_("duplicate_text"))
   local stationDuplicateCombobox = api.gui.comp.ComboBox.new()
@@ -937,9 +971,32 @@ function timetableWindowFuncs.initWindow(guiState)
       0):setName("StrictTimetable::TimetableSpinbox")
   guiState.timetableWindow.maxLatenessSecSpinbox = maxLatenessSecSpinbox
 
+  -- Spinbox to set the route length for a line.
+  local hourSpanLeftText = api.gui.comp.TextView.new(_("hour_span_left"))
+  hourSpanLeftText:setTooltip(_("hour_span_tooltip"))
+  local hourSpanText = api.gui.comp.TextInputField.new(
+      "StrictTimetable::TimetableEntry")
+  hourSpanText:setText("1", false)
+  hourSpanText:setGravity(0.5, 0.5)
+  hourSpanText:setMaximumSize(api.gui.util.Size.new(10, 30))
+  guiState.timetableWindow.hourSpanText = hourSpanText
+
+  local hourSpanSpinbox = api.gui.comp.SpinBox.new(1, 9, 1)
+  hourSpanSpinbox:setGravity(0.0, 0.5)
+  hourSpanSpinbox:getLayout():getItem(0):setVisible(false, false)
+  hourSpanSpinbox:getLayout():getItem(1):getItem(0):getLayout():getItem(
+      0):setName("StrictTimetable::TimetableSpinbox")
+  hourSpanSpinbox:getLayout():getItem(1):getItem(1):getLayout():getItem(
+      0):setName("StrictTimetable::TimetableSpinbox")
+  guiState.timetableWindow.hourSpanSpinbox = hourSpanSpinbox
+
+  local hourSpanRightText = api.gui.comp.TextView.new(_("hour_span_right"))
+
   stationDuplicateTable:addRow({ stationDuplicateText, stationDuplicateCombobox,
       stationDuplicateApply, api.gui.comp.TextView.new(""), maxLatenessText,
-      maxLatenessMinSpinbox, maxLatenessTime, maxLatenessSecSpinbox })
+      maxLatenessMinSpinbox, maxLatenessTime, maxLatenessSecSpinbox,
+      api.gui.comp.TextView.new(""), hourSpanLeftText, hourSpanText,
+      hourSpanSpinbox, hourSpanRightText })
   stationDuplicateTable:setVisible(false, false)
   guiState.timetableWindow.stationDuplicateTable = stationDuplicateTable
 
@@ -1021,6 +1078,10 @@ function timetableWindowFuncs.initWindow(guiState)
           timetableWindowFuncs.modifyMaxLateSpinbox(guiState, lineId) end)
       guiState.timetableWindow.maxLatenessSecSpinbox:onChange(function()
           timetableWindowFuncs.modifyMaxLateSpinbox(guiState, lineId) end)
+      guiState.timetableWindow.hourSpanText:onEnter(function()
+          timetableWindowFuncs.modifyHourSpanText(guiState, lineId) end)
+      guiState.timetableWindow.hourSpanSpinbox:onChange(function()
+          timetableWindowFuncs.modifyHourSpanSpinbox(guiState, lineId) end)
 
       timetableWindowFuncs.refreshStationTable(guiState, i + 1)
     end

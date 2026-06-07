@@ -23,6 +23,64 @@ end
 -- Attempt to assign a vehicle to a timetable slot.  This may fail if there are
 -- not currently any open slots.
 --
+--
+-- What is a strategy for assigning timeslots?
+-- We can require that timeslots are provided in order.
+--
+-- Whenever we assign a timeslot, we should store the current hour.  That is
+-- definitely necessary to figure out when we release timeslots.
+--
+-- If timeslots are in order, we can track which slot is the next one that we
+-- want to assign.  We can then print when there is a missed slot.
+--
+-- However, if the total timetable is only an hour long, we would need to
+-- support multiple vehicles in a single timeslot.  This would be a fairly
+-- significant overhaul.
+--
+-- For multiple vehicles per timeslot:
+--  * Max number is "floor(route length / 60)"
+--  * slotAssignments needs to be an array
+--      - where is slotAssignments used?
+--          * timetable_window_funcs: to get each assigned vehicle and determine
+--             if it is late (refreshStationTable()); that just needs to be
+--             adapted to handle multiple vehicles.  Tooltip assembly needs help
+--             too?
+--
+--          * timetable_funcs: clearVehicles()
+--              now this will need to go through all the vehicles that are
+--              assigned to a slot, not just one
+--
+--          * timetable_funcs: tryAssignSlot()
+--              we need better logic here to determine whether we can add a
+--              second vehicle to a line; yield logic also needs to be updated
+--
+--          * timetable_funcs: vehicleUpdate(), near the top
+--              this checks in slotAssignments that all vehicles still exist;
+--              this loop will just need to be adapted to handle multiple
+--              vehicles (I think)
+--
+--          * timetable_funcs: vehicleUpdate(), "now iterate over vehicles"
+--              if a vehicle has returned to the original station, then we need
+--              to unassign it from the slot
+--
+--          * timetable_funcs: vehicleUpdate(), near the bottom
+--              if a vehicle is too late, it does not get to keep its slot and
+--              the slot needs to be released
+--
+-- What if instead of "route length" we instead just had a number of hours that
+-- specified the number of vehicles that could possibly be assigned to a slot?
+--
+-- In addition, we should have a "safe" accessor for these things.
+--
+-- Incremental changes:
+--
+-- Let's set the route length to hours, and implement that support.
+-- That can be a commit, and we can move on to multiple slot assignments from
+-- there.
+--
+-- Here, the only changes for route length will be to the code that drops a
+-- vehicle when it's too late.
+--
 function timetableFuncs.tryAssignSlot(timetables, clock, line, vehicle)
   -- If the timetable doesn't exist but is enabled, then just return for now.
   if not timetables.timetable[line] then
@@ -33,6 +91,8 @@ function timetableFuncs.tryAssignSlot(timetables, clock, line, vehicle)
   local slot = 1
   local bestDiff = { mins = 60, secs = 0 }
   local bestSlot = 0
+  local bestHourDiff = 0
+  local bestSlotTime = { min = 0, sec = 0 }
   while slot <= #timetables.timetable[line] do
     if timetables.slotAssignments[line] == nil or
         timetables.slotAssignments[line][slot] == nil then
@@ -58,6 +118,13 @@ function timetableFuncs.tryAssignSlot(timetables, clock, line, vehicle)
         if clockFuncs.smallerDiff(diff, bestDiff) then
           bestDiff = diff
           bestSlot = slot
+          bestSlotTime = slotTime
+          if slotTime.min < clock.min or
+              (slotTime.min == clock.min and slotTime.sec < clock.sec) then
+            bestHourDiff = 1
+          else
+            bestHourDiff = 0
+          end
         end
       end
     end
@@ -83,7 +150,11 @@ function timetableFuncs.tryAssignSlot(timetables, clock, line, vehicle)
         slot = bestSlot,
         assigned = true,
         stopIndex = 0,
-        released = false }
+        released = false,
+        firstStopTime = {
+            hour = (clock.hour + bestHourDiff),
+            min = bestSlot.min,
+            sec = bestSlot.sec } }
   else
     timetables.vehicles[vehicle] = {
         slot = 0,
@@ -311,11 +382,23 @@ function timetableFuncs.vehicleUpdate(timetables, clock, debug)
             timetableFuncs.releaseIfNeeded(timetables, clock, l, v, vi,
                 (vi.stopIndex == 0), debug)
           end
-        elseif timetables.vehicles[v] and timetables.vehicles[v].slot then
-          -- If the vehicle is returning back to the first stop and will not
-          -- make it there in time for the first departure, then yield the slot.
-          if timetables.vehicles[v].stopIndex == #lineInfo.stops - 1 and
-              timetables.vehicles[v].slot > 0 then
+        elseif timetables.vehicles[v] and timetables.vehicles[v].slot ~= 0 then
+          -- If the route takes no more than N hours, then if it is within 1
+          -- minute of N hours and we have not returned, then we relinquish the
+          -- slot.
+          local hours = 1
+          if timetables.hourSpans[l] ~= nil then
+            hours = timetables.hourSpans[l]
+          end
+
+          -- Determine how long it has been since we were released.
+          local origReleased = nil
+          if timetables.vehicles[v].firstStopTime ~= nil then
+            origReleased = timetables.vehicles[v].firstStopTime
+          else
+            -- Infer that it was released either this hour or last.
+            -- NOTE: this can be removed after a few hours of working gameplay.
+            --
             -- Check the target release time of the first timetabled station.
             local firstTimedStop = 1
             local slot = timetables.vehicles[v].slot
@@ -328,73 +411,41 @@ function timetableFuncs.vehicleUpdate(timetables, clock, debug)
 
               firstTimedStop = firstTimedStop + 1
             end
-            local d = clockFuncs.timeDiff(clock,
+
+            origReleased =
                 { min = timetables.timetable[l][slot][firstTimedStop][1],
-                  sec = timetables.timetable[l][slot][firstTimedStop][2] })
-            local maxLate = { min = 30, sec = 0 }
-            if timetables.maxLateness[l] then
-              maxLate = timetables.maxLateness[l]
+                  sec = timetables.timetable[l][slot][firstTimedStop][2] }
+
+            -- If this is after the current time, then the hour was last hour.
+            -- Otherwise it is this hour.
+            if clock.min > origReleased.min or
+               (clock.min == origReleased.min and clock.sec >= origReleased.sec) then
+              origReleased.hour = clock.hour
+            else
+              origReleased.hour = clock.hour - 1
             end
+          end
 
-            if ((d.mins == 0 and d.secs < 5) or
-                (d.mins >= (60 - maxLate.min)) or
-                ((d.mins == (60 - maxLate.min)) and
-                 (d.secs >= (60 - maxLate.sec)))) then
-              if debug then
-                print("StrictTimetables: vehicle " .. tostring(v) .. " (" ..
-                    vehicleUtils.getName(v) .. ") on line " .. tostring(l) ..
-                    " (" .. lineUtils.getName(l) .. ") is too late to keep " ..
-                    "slot " .. tostring(timetables.vehicles[v].slot) .. "; " ..
-                    "unassigned.")
-              end
-
-              local oldSlot = timetables.vehicles[v].slot
-              timetables.slotAssignments[l][oldSlot] = nil
-              timetables.vehicles[v] = { slot = 0, assigned = false,
-                  stopIndex = 0, released = false }
-
-              -- Check if there are any waiting vehicles who could use the slot.
-              if d.mins == 0 and d.secs < 5 then
-                for s, vv in pairs(timetables.slotAssignments[l]) do
-                  if vv and timetables.vehicles[vv] and
-                      timetables.vehicles[vv].stopIndex == 0 and
-                      timetables.vehicles[vv].released == false then
-                    local f = 1
-                    while f <= #timetables.timetable[l][s] do
-                      -- Does this stop have a timetable?
-                      if timetables.timetable[l][s][f] ~= nil then
-                        -- If so, it's the first timed stop.
-                        break
-                      end
-
-                      f = f + 1
-                    end
-
-                    if f <= #timetables.timetable[l][s] then
-                      local d2 = clockFuncs.timeDiff(clock,
-                        { min = timetables.timetable[l][s][f][1],
-                          sec = timetables.timetable[l][s][f][2] })
-                      if (d2.mins > 0) or (d2.mins == 0 and d2.secs >= 5) then
-                        if debug then
-                          print("StrictTimetables: vehicle " .. tostring(v) ..
-                              " (" .. vehicleUtils.getName(vv) .. ") on line" ..
-                              " " .. tostring(l) .. " (" ..
-                              lineUtils.getName(l) .. " will switch to slot " ..
-                              tostring(oldSlot) .. " instead of " ..
-                              tostring(s) .. ".")
-                        end
-
-                        timetables.slotAssignments[l][s] = nil
-                        timetables.slotAssignments[l][oldSlot] = vv
-                        timetables.vehicles[vv].slot = oldSlot
-                        timetables.vehicles[vv].assigned = true
-                        break
-                      end
-                    end
-                  end
-                end
-              end
+          -- Now determine how long it has been since we released the train.
+          local secsSinceRelease = (clock.hour - origReleased.hour) * 3600 +
+              (clock.min - origReleased.min) * 60 +
+              (clock.sec - origReleased.sec)
+          if secsSinceRelease > (3600 * hours - 60) then
+            -- We have exceeded our limits: yield the slot.
+            if debug then
+              print("StrictTimetables: vehicle " .. tostring(v) .. " (" ..
+                  vehicleUtils.getName(v) .. ") on line " .. tostring(l) ..
+                  " (" .. lineUtils.getName(l) .. ") has not finished its " ..
+                  "timetable in slot " ..
+                  tostring(timetables.vehicles[v].slot) .. " within " ..
+                  tostring(hours) .. " hours; unassigned.")
             end
+            api.cmd.sendCommand(api.cmd.make.setVehicleManualDeparture(v,
+                false))
+            local oldSlot = timetables.vehicles[v].slot
+            timetables.slotAssignments[l][oldSlot] = nil
+            timetables.vehicles[v] = { slot = 0, assigned = false,
+                stopIndex = 0, released = false }
           end
         end
       end

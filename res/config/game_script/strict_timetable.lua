@@ -10,8 +10,9 @@ local engineState = {
     enabled = {}, -- If enabled[lineId] is true, then the timetable is enabled.
     timetable = {},
     slotAssignments = {}, -- slotAssignments[line][slot] --> vehicle
-    vehicles = {}, -- vehicles[v] --> { line, slot, current station }
-    maxLateness = {}
+    vehicles = {}, -- vehicles[v] --> { line, slot, current station, first release }
+    maxLateness = {},
+    hourSpans = {} -- hourSpans[line] --> int
   },
   -- Whether debugging output is enabled.  Prints the timetable to the log after
   -- every update.
@@ -50,6 +51,10 @@ local guiState = {
     maxLatenessMinSpinbox = nil,
     -- The second spinbox for setting the maximum lateness of a line.
     maxLatenessSecSpinbox = nil,
+    -- The text input field for setting the route length of a line.
+    hourSpanText = nil,
+    -- The spinbox for setting the number of hours for a line.
+    hourSpanSpinbox = nil,
     -- The area in the station table that holds unassigned vehicles.
     unassignedVehiclesArea = nil,
     -- The list of icons displayed for unassigned vehicles.
@@ -74,7 +79,8 @@ local guiState = {
     timetable = {},
     slotAssignments = {}, -- slotAssignments[line][slot] --> vehicle
     vehicles = {}, -- vehicles[v] --> { line, slot, current station }
-    maxLateness = {}
+    maxLateness = {},
+    hourSpans = {} -- hourSpans[line] --> int
   },
   -- Whether or not the timetable window should always
   -- be refreshed when shown.
@@ -91,6 +97,8 @@ function data()
     save = function ()
       if clock == nil then
         clock = clockFuncs.initClock()
+      elseif clock.hour == nil then
+        clock.hour = 0
       end
 
       return { clock = clock, timetables = engineState.timetables }
@@ -137,6 +145,10 @@ function data()
           engineState.timetables.maxLateness = {}
         end
 
+        if not engineState.timetables.hourSpans then
+          engineState.timetables.hourSpans = {}
+        end
+
         if not engineState.timetables.enabled then
           engineState.timetables.enabled = {}
         end
@@ -176,12 +188,12 @@ function data()
       end
 
       -- Tick the time counter if needed.
-      local lastClock = { min = clock.min, sec = clock.sec }
+      local lastSec = clock.sec
       clock = clockFuncs.updateClock(clock)
 
       -- Update all vehicles, but only the first time this callback happens
       -- during this second.
-      if lastClock.sec ~= clock.sec then
+      if lastSec ~= clock.sec then
         timetableFuncs.vehicleUpdate(engineState.timetables, clock,
             engineState.debug)
       end
@@ -199,6 +211,9 @@ function data()
         if not guiState.timetables.maxLateness then
           guiState.timetables.maxLateness = {}
         end
+        if not guiState.timetables.hourSpans then
+          guiState.timetables.hourSpans = {}
+        end
       end
     end,
 
@@ -214,6 +229,7 @@ function data()
 
       if guiState.clockHandle and clock then
         guiState.clockHandle:setText(clockFuncs.printClock(clock))
+        guiState.clockHandle:setTooltip(clockFuncs.printFullClock(clock))
       end
 
       -- If we could be modifying lines or vehicles, we need to refresh the
@@ -373,6 +389,14 @@ function data()
                 tostring(param.line) .. " to " .. clockFuncs.printClock(
                 engineState.timetables.maxLateness[param.line]) .. ".")
           end
+
+        elseif name == "update_hour_span" then
+          engineState.timetables.hourSpans[param.line] = param.hours
+          if engineState.debug then
+            print("StrictTimetables: set hour span for line " ..
+                tostring(param.line) .. " to " .. tostring(param.hours) .. ".")
+          end
+
         end
 
       elseif id == "toggle_debug" then

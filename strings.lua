@@ -43,7 +43,10 @@ Note that there are [b]no arrival times[/b] in this mod; you only set the depart
       ["max_lateness"] = "Maximum lateness:",
       ["max_lateness_tooltip"] = "Trains later than this will be considered early (so e.g. if set\nto 30 minutes, a train that is 45 minutes late will actually be\nconsidered 15 minutes early, and will wait for 15 minutes until\nbeing released.  Similarly, a train arriving 45 minutes early will\nactually be considered 15 minutes late and immediately\nreleased!)",
       ["apply"] = "Apply!",
-      ["apply_tooltip"] = "Apply the timetable spacing with the selected spacing.\n(If no spacing is selected, nothing happens.)\n\nThis will *overwrite* every slot in the existing timetable\nafter the first with new timeslots that have the specified\nspacing from the original."
+      ["apply_tooltip"] = "Apply the timetable spacing with the selected spacing.\n(If no spacing is selected, nothing happens.)\n\nThis will *overwrite* every slot in the existing timetable\nafter the first with new timeslots that have the specified\nspacing from the original.",
+      ["hour_span_left"] = "Route takes no more than",
+      ["hour_span_right"] = "hours.",
+      ["hour_span_tooltip"] = "The number of hours that a route takes specifies the number of vehicles that are allowed to claim the timetable slot in successive hours."
     }
   }
 end
