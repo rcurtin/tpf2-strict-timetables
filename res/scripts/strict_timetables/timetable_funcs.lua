@@ -153,8 +153,8 @@ function timetableFuncs.tryAssignSlot(timetables, clock, line, vehicle)
         released = false,
         firstStopTime = {
             hour = (clock.hour + bestHourDiff),
-            min = bestSlot.min,
-            sec = bestSlot.sec } }
+            min = bestSlotTime.min,
+            sec = bestSlotTime.sec } }
   else
     timetables.vehicles[vehicle] = {
         slot = 0,
