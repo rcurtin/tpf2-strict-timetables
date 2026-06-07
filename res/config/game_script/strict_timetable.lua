@@ -9,7 +9,7 @@ local engineState = {
   timetables = {
     enabled = {}, -- If enabled[lineId] is true, then the timetable is enabled.
     timetable = {},
-    slotAssignments = {}, -- slotAssignments[line][slot] --> vehicle
+    slotAssignments = {}, -- slotAssignments[line][slot] --> [vehicles...]
     vehicles = {}, -- vehicles[v] --> { line, slot, current station, first release }
     maxLateness = {},
     hourSpans = {} -- hourSpans[line] --> int
@@ -77,7 +77,7 @@ local guiState = {
   timetables = {
     enabled = {}, -- If enabled[lineId] is true, then the timetable is enabled.
     timetable = {},
-    slotAssignments = {}, -- slotAssignments[line][slot] --> vehicle
+    slotAssignments = {}, -- slotAssignments[line][slot] --> [vehicles...]
     vehicles = {}, -- vehicles[v] --> { line, slot, current station }
     maxLateness = {},
     hourSpans = {} -- hourSpans[line] --> int
@@ -125,6 +125,16 @@ function data()
 
         if not engineState.timetables.slotAssignments then
           engineState.timetables.slotAssignments = {}
+        else
+          -- TODO: remove this; this is for reverse compatibility only
+          for l, vs in pairs(engineState.timetables.slotAssignments) do
+            for k, v in pairs(vs) do
+              if type(v) ~= "table" then
+                print("Update slot assignment line " .. tostring(l) .. ", slot " .. tostring(k) .. " to array")
+                engineState.timetables.slotAssignments[l][k] = { v }
+              end
+            end
+          end
         end
 
         if not engineState.timetables.vehicles then
@@ -167,6 +177,15 @@ function data()
       if guiState.timetables and loadedState then
         if loadedState.timetables and loadedState.timetables.slotAssignments then
           guiState.timetables.slotAssignments = loadedState.timetables.slotAssignments
+          -- TODO: remove this; this is for reverse compatibility only
+          for l, vs in pairs(guiState.timetables.slotAssignments) do
+            for k, v in pairs(vs) do
+              if type(v) ~= "table" then
+                print("Update slot assignment line " .. tostring(l) .. ", slot " .. tostring(k) .. " to array")
+                guiState.timetables.slotAssignments[l][k] = { v }
+              end
+            end
+          end
         end
         if loadedState.timetables and loadedState.timetables.vehicles then
           guiState.timetables.vehicles = loadedState.timetables.vehicles

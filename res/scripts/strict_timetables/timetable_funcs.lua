@@ -12,7 +12,7 @@ timetableFuncs = {}
 --
 function timetableFuncs.clearVehicles(timetables, line)
   for _, v in pairs(timetables.slotAssignments[line]) do
-    timetables.vehicles[v] = nil
+    timetables.vehicles[v[1]] = nil
     -- Make sure the vehicle won't just wait somewhere forever.
     api.cmd.sendCommand(api.cmd.make.setVehicleManualDeparture(v, false))
   end
@@ -81,6 +81,12 @@ end
 -- Here, the only changes for route length will be to the code that drops a
 -- vehicle when it's too late.
 --
+--
+-- Implementation plan for tomorrow:
+--
+--  * All current timetables.slotAssignments[] need to be updated to be lists.
+--  * We will need a new icon for when multiple slots are assigned.
+--
 function timetableFuncs.tryAssignSlot(timetables, clock, line, vehicle)
   -- If the timetable doesn't exist but is enabled, then just return for now.
   if not timetables.timetable[line] then
@@ -145,7 +151,7 @@ function timetableFuncs.tryAssignSlot(timetables, clock, line, vehicle)
     if not timetables.slotAssignments[line] then
       timetables.slotAssignments[line] = {}
     end
-    timetables.slotAssignments[line][bestSlot] = vehicle
+    timetables.slotAssignments[line][bestSlot] = { vehicle }
     timetables.vehicles[vehicle] = {
         slot = bestSlot,
         assigned = true,
@@ -294,13 +300,13 @@ function timetableFuncs.vehicleUpdate(timetables, clock, debug)
       -- Sanity check before we start: does the vehicle still exist?
       if timetables.slotAssignments[l] then
         for s, v in pairs(timetables.slotAssignments[l]) do
-          if v and not api.engine.entityExists(v) then
+          if v and v[1] and not api.engine.entityExists(v[1]) then
             if debug then
-              print("StrictTimetables: vehicle " .. tostring(v) ..
+              print("StrictTimetables: vehicle " .. tostring(v[1]) ..
                 " no longer exists!  Deleting.")
             end
             timetables.slotAssignments[s] = nil
-            timetables.vehicles[v] = nil
+            timetables.vehicles[v[1]] = nil
           end
         end
       end
@@ -510,7 +516,7 @@ function timetableFuncs.shiftVehiclesForRemovedSlot(timetables, line, slot)
           -- The slot needs to be shifted by one.
           timetables.slotAssignments[line][timetables.vehicles[v].slot] = nil
           timetables.vehicles[v].slot = timetables.vehicles[v].slot - 1
-          timetables.slotAssignments[line][timetables.vehicles[v].slot] = v
+          timetables.slotAssignments[line][timetables.vehicles[v].slot] = { v }
         end
       end
     end

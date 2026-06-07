@@ -684,8 +684,8 @@ function timetableWindowFuncs.refreshStationTable(guiState, index)
     if guiState.timetables.slotAssignments[lineId] and
         guiState.timetables.slotAssignments[lineId][slot] and
         api.engine.entityExists( -- Check that the user didn't delete it...
-            guiState.timetables.slotAssignments[lineId][slot]) then
-      local av = guiState.timetables.slotAssignments[lineId][slot]
+            guiState.timetables.slotAssignments[lineId][slot][1]) then
+      local av = guiState.timetables.slotAssignments[lineId][slot][1]
 
       -- TODO: handle if guiState.timetables.vehicles[av] is nil!
 
